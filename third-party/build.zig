@@ -38,9 +38,14 @@ pub fn build_llvm(b: *std.Build, optimize: std.builtin.OptimizeMode) LLVMBuildEr
         "-B",
         build.getPath(b),
         "-DLLVM_ENABLE_PROJECTS='mlir'",
-        b.fmt("-DCMAKE_INSTALL_PREFIX={any}", .{install.getPath(b)}),
+        b.fmt("-DCMAKE_INSTALL_PREFIX={s}", .{install.getPath(b)}),
         "-DLLVM_ENABLE_ASSERTIONS=ON",
         b.fmt("-DCMAKE_BUILD_TYPE={s}", .{build_type}),
+        "-DLLVM_TOOL_LLI_BUILD=OFF",
+        "-DLLVM_INCLUDE_EXAMPLES=OFF",
+        "-DLLVM_INCLUDE_TESTS=OFF",
+        "-DLLVM_INCLUDE_UTILS=OFF",
+        "-DLLVM_BUILD_TOOLS=OFF",
     });
 
     const llvm_build = b.addSystemCommand(&.{
