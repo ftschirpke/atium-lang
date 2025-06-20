@@ -41,8 +41,6 @@ pub fn build_llvm(b: *std.Build, optimize: std.builtin.OptimizeMode) LLVMBuildEr
         "-DLLVM_BUILD_TOOLS=OFF",
     });
     llvm_config.step.name = "configure-llvm-build";
-    _ = llvm_config.captureStdOut();
-    _ = llvm_config.captureStdErr();
 
     const llvm_build = b.addSystemCommand(&.{
         "cmake",
@@ -52,8 +50,6 @@ pub fn build_llvm(b: *std.Build, optimize: std.builtin.OptimizeMode) LLVMBuildEr
         "install",
     });
     llvm_build.step.name = "run-llvm-build";
-    _ = llvm_build.captureStdOut();
-    _ = llvm_build.captureStdErr();
 
     llvm_build.step.dependOn(&llvm_config.step);
 
