@@ -16,18 +16,11 @@ pub fn build_llvm(b: *std.Build, optimize: std.builtin.OptimizeMode) LLVMBuildEr
     const install_path = try cwd.join(b.allocator, install_dir);
     const install = try install_path.join(b.allocator, name);
 
-    var build_type: []const u8 = undefined;
-    switch (optimize) {
-        std.builtin.OptimizeMode.Debug => {
-            build_type = "Debug";
-        },
-        std.builtin.OptimizeMode.ReleaseSmall => {
-            build_type = "MinSizeRel";
-        },
-        else => {
-            build_type = "Release";
-        },
-    }
+    const build_type = switch (optimize) {
+        std.builtin.OptimizeMode.Debug => "Debug",
+        std.builtin.OptimizeMode.ReleaseSmall => "MinSizeRel",
+        else => "Release",
+    };
 
     const llvm_config = b.addSystemCommand(&.{
         "cmake",
@@ -37,7 +30,7 @@ pub fn build_llvm(b: *std.Build, optimize: std.builtin.OptimizeMode) LLVMBuildEr
         src.getPath(b),
         "-B",
         build.getPath(b),
-        "-DLLVM_ENABLE_PROJECTS='mlir'",
+        "-DLLVM_ENABLE_PROJECTS=mlir",
         b.fmt("-DCMAKE_INSTALL_PREFIX={s}", .{install.getPath(b)}),
         "-DLLVM_ENABLE_ASSERTIONS=ON",
         b.fmt("-DCMAKE_BUILD_TYPE={s}", .{build_type}),
@@ -47,6 +40,7 @@ pub fn build_llvm(b: *std.Build, optimize: std.builtin.OptimizeMode) LLVMBuildEr
         "-DLLVM_INCLUDE_UTILS=OFF",
         "-DLLVM_BUILD_TOOLS=OFF",
     });
+    llvm_config.step.name = "configure-llvm-build";
 
     const llvm_build = b.addSystemCommand(&.{
         "cmake",
@@ -55,6 +49,7 @@ pub fn build_llvm(b: *std.Build, optimize: std.builtin.OptimizeMode) LLVMBuildEr
         "--target",
         "install",
     });
+    llvm_build.step.name = "run-llvm-build";
 
     llvm_build.step.dependOn(&llvm_config.step);
 
