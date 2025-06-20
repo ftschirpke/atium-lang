@@ -1,64 +1,572 @@
 const std = @import("std");
 
-pub fn build(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, llvm: *std.Build.Step.Run) void {
-
-    // We will also create a module for our other entry point, 'main.zig'.
-    const exe_mod = b.createModule(.{
-        // `root_source_file` is the Zig "entry point" of the module. If a module
-        // only contains e.g. external object files, you can make this `null`.
-        // In this case the main source file is merely a path, however, in more
-        // complicated build scripts, this could be a generated file.
-        .root_source_file = b.path("src/main.zig"),
+pub fn build(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    llvm: *std.Build.Step.Run,
+) void {
+    const lib_mod = b.addModule("mlir_zig", .{
+        .root_source_file = b.path("mlir-zig/src/root.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
+        .link_libcpp = true,
     });
 
-    // This creates another `std.Build.Step.Compile`, but this one builds an executable
-    // rather than a static library.
-    const exe = b.addExecutable(.{
+    const lib = b.addLibrary(.{
+        .linkage = .static,
         .name = "mlir_zig",
-        .root_module = exe_mod,
+        .root_module = lib_mod,
     });
 
-    b.getInstallStep().dependOn(&llvm.step);
+    lib.step.dependOn(&llvm.step);
 
-    // This declares intent for the executable to be installed into the
-    // standard location when the user invokes the "install" step (the default
-    // step when running `zig build`).
-    b.installArtifact(exe);
+    lib.addLibraryPath(b.path("third-party/install/llvm/lib"));
 
-    // This *creates* a Run step in the build graph, to be executed when another
-    // step is evaluated that depends on it. The next line below will establish
-    // such a dependency.
-    const run_cmd = b.addRunArtifact(exe);
+    lib.linkSystemLibrary("stdc++");
 
-    // By making the run step depend on the install step, it will be run from the
-    // installation directory rather than directly from within the cache directory.
-    // This is not necessary, however, if the application depends on other installed
-    // files, this ensures they will be present and in the expected location.
-    run_cmd.step.dependOn(b.getInstallStep());
+    lib.linkSystemLibrary("MLIRTargetLLVMIRExport");
+    lib.linkSystemLibrary("LLVMHexagonDisassembler");
+    lib.linkSystemLibrary("MLIRX86VectorToLLVMIRTranslation");
+    lib.linkSystemLibrary("MLIRBufferizationPipelines");
+    lib.linkSystemLibrary("MLIRXeGPUTransforms");
+    lib.linkSystemLibrary("MLIRSPIRVModuleCombiner");
+    lib.linkSystemLibrary("LLVMHexagonInfo");
+    lib.linkSystemLibrary("MLIRTransformDialectInterfaces");
+    lib.linkSystemLibrary("LLVMOrcShared");
+    lib.linkSystemLibrary("LLVMARMInfo");
+    lib.linkSystemLibrary("MLIRBytecodeOpInterface");
+    lib.linkSystemLibrary("LLVMExegesisX86");
+    lib.linkSystemLibrary("MLIRArmNeonDialect");
+    lib.linkSystemLibrary("MLIRSPIRVBinaryUtils");
+    lib.linkSystemLibrary("MLIRAffineDialect");
+    lib.linkSystemLibrary("MLIRSPIRVDeserialization");
+    lib.linkSystemLibrary("LLVMHexagonCodeGen");
+    lib.linkSystemLibrary("MLIRValueBoundsOpInterface");
+    lib.linkSystemLibrary("MLIRX86VectorTransforms");
+    lib.linkSystemLibrary("MLIRComplexToLibm");
+    lib.linkSystemLibrary("MLIRGPUDialect");
+    lib.linkSystemLibrary("LLVMOrcTargetProcess");
+    lib.linkSystemLibrary("LLVMNVPTXInfo");
+    lib.linkSystemLibrary("MLIRTensorToLinalg");
+    lib.linkSystemLibrary("MLIRObservers");
+    lib.linkSystemLibrary("LLVMAMDGPUDesc");
+    lib.linkSystemLibrary("MLIRCAPIGPU");
+    lib.linkSystemLibrary("MLIRMemRefDialect");
+    lib.linkSystemLibrary("MLIRMLProgramTransforms");
+    lib.linkSystemLibrary("MLIRAMXDialect");
+    lib.linkSystemLibrary("MLIRTransformLoopExtension");
+    lib.linkSystemLibrary("MLIRCAPIEmitC");
+    lib.linkSystemLibrary("MLIRAsmParser");
+    lib.linkSystemLibrary("MLIRAMDGPUUtils");
+    lib.linkSystemLibrary("MLIRFuncMeshShardingExtensions");
+    lib.linkSystemLibrary("MLIRCAPIVector");
+    lib.linkSystemLibrary("LLVMLoongArchDesc");
+    lib.linkSystemLibrary("MLIRMeshDialect");
+    lib.linkSystemLibrary("MLIROpenACCTransforms");
+    lib.linkSystemLibrary("MLIRNVVMToLLVM");
+    lib.linkSystemLibrary("LLVMMSP430Disassembler");
+    lib.linkSystemLibrary("MLIRIndexToLLVM");
+    lib.linkSystemLibrary("LLVMARMDisassembler");
+    lib.linkSystemLibrary("LLVMFrontendDriver");
+    lib.linkSystemLibrary("MLIRDestinationStyleOpInterface");
+    lib.linkSystemLibrary("MLIRGPUUtils");
+    lib.linkSystemLibrary("MLIRMathTransforms");
+    lib.linkSystemLibrary("MLIRCAPISPIRV");
+    lib.linkSystemLibrary("MLIRCAPILLVM");
+    lib.linkSystemLibrary("LLVMLineEditor");
+    lib.linkSystemLibrary("MLIRPluginsLib");
+    lib.linkSystemLibrary("LLVMExegesisMips");
+    lib.linkSystemLibrary("MLIRTensorTransformOps");
+    lib.linkSystemLibrary("MLIRTableGen");
+    lib.linkSystemLibrary("MLIRSPIRVAttrToLLVMConversion");
+    lib.linkSystemLibrary("MLIRArmSMEToLLVMIRTranslation");
+    lib.linkSystemLibrary("MLIRIndexDialect");
+    lib.linkSystemLibrary("MLIRLLVMIRToNVVMTranslation");
+    lib.linkSystemLibrary("MLIRQuantUtils");
+    lib.linkSystemLibrary("MLIRVectorTransforms");
+    lib.linkSystemLibrary("LLVMDebugInfoGSYM");
+    lib.linkSystemLibrary("LLVMBPFDisassembler");
+    lib.linkSystemLibrary("LLVMMipsDesc");
+    lib.linkSystemLibrary("MLIRLspServerSupportLib");
+    lib.linkSystemLibrary("LLVMObjCopy");
+    lib.linkSystemLibrary("MLIRSCFToOpenMP");
+    lib.linkSystemLibrary("LLVMObjCARCOpts");
+    lib.linkSystemLibrary("MLIRBytecodeWriter");
+    lib.linkSystemLibrary("LLVMRISCVAsmParser");
+    lib.linkSystemLibrary("MLIRArithUtils");
+    lib.linkSystemLibrary("MLIRCAPIExecutionEngine");
+    lib.linkSystemLibrary("MLIROpenACCDialect");
+    lib.linkSystemLibrary("LLVMLoongArchInfo");
+    lib.linkSystemLibrary("LLVMInstrumentation");
+    lib.linkSystemLibrary("LLVMVEDesc");
+    lib.linkSystemLibrary("MLIRSparseTensorRuntime");
+    lib.linkSystemLibrary("MLIRNVGPUUtils");
+    lib.linkSystemLibrary("LLVMAArch64Desc");
+    lib.linkSystemLibrary("MLIRPresburger");
+    lib.linkSystemLibrary("LLVMAArch64AsmParser");
+    lib.linkSystemLibrary("LLVMDebugInfoPDB");
+    lib.linkSystemLibrary("MLIRCAPINVVM");
+    lib.linkSystemLibrary("MLIRLinalgUtils");
+    lib.linkSystemLibrary("MLIRCAPIDebug");
+    lib.linkSystemLibrary("MLIRSPIRVSerialization");
+    lib.linkSystemLibrary("MLIRFuncDialect");
+    lib.linkSystemLibrary("MLIRMathToLLVM");
+    lib.linkSystemLibrary("LLVMAMDGPUTargetMCA");
+    lib.linkSystemLibrary("MLIRExecutionEngine");
+    lib.linkSystemLibrary("MLIRCAPITarget");
+    lib.linkSystemLibrary("LLVMSymbolize");
+    lib.linkSystemLibrary("LLVMRemarks");
+    lib.linkSystemLibrary("MLIRFuncTransforms");
+    lib.linkSystemLibrary("MLIRTensorTilingInterfaceImpl");
+    lib.linkSystemLibrary("MLIRCAPIAMDGPU");
+    lib.linkSystemLibrary("MLIRTosaShardingInterfaceImpl");
+    lib.linkSystemLibrary("LLVMGlobalISel");
+    lib.linkSystemLibrary("MLIRAnalysis");
+    lib.linkSystemLibrary("MLIRTensorDialect");
+    lib.linkSystemLibrary("LLVMOrcDebugging");
+    lib.linkSystemLibrary("LLVMDWP");
+    lib.linkSystemLibrary("MLIRAsyncToLLVM");
+    lib.linkSystemLibrary("LLVMExegesisRISCV");
+    lib.linkSystemLibrary("LLVMMipsInfo");
+    lib.linkSystemLibrary("MLIRPDLLAST");
+    lib.linkSystemLibrary("MLIRCAPISCF");
+    lib.linkSystemLibrary("MLIRFuncInlinerExtension");
+    lib.linkSystemLibrary("LLVMLoongArchCodeGen");
+    lib.linkSystemLibrary("MLIRTilingInterface");
+    lib.linkSystemLibrary("LLVMFuzzerCLI");
+    lib.linkSystemLibrary("MLIRTargetLLVMIRImport");
+    lib.linkSystemLibrary("MLIRMemRefToEmitC");
+    lib.linkSystemLibrary("MLIRArmSVETransforms");
+    lib.linkSystemLibrary("MLIRCAPIArith");
+    lib.linkSystemLibrary("MLIRLinalgDialect");
+    lib.linkSystemLibrary("MLIRCAPINVGPU");
+    lib.linkSystemLibrary("MLIRMathDialect");
+    lib.linkSystemLibrary("MLIRSparseTensorDialect");
+    lib.linkSystemLibrary("MLIRLspServerLib");
+    lib.linkSystemLibrary("MLIRUBToLLVM");
+    lib.linkSystemLibrary("MLIRROCDLTarget");
+    lib.linkSystemLibrary("MLIROpenACCMPCommon");
+    lib.linkSystemLibrary("LLVMSPIRVInfo");
+    lib.linkSystemLibrary("MLIRTransformDialect");
+    lib.linkSystemLibrary("MLIRTransformDialectIRDLExtension");
+    lib.linkSystemLibrary("MLIRCopyOpInterface");
+    lib.linkSystemLibrary("MLIRSPIRVTranslateRegistration");
+    lib.linkSystemLibrary("LLVMDiff");
+    lib.linkSystemLibrary("LLVMObjectYAML");
+    lib.linkSystemLibrary("MLIRArithValueBoundsOpInterfaceImpl");
+    lib.linkSystemLibrary("MLIRCAPITensor");
+    lib.linkSystemLibrary("MLIRNVGPUTransformOps");
+    lib.linkSystemLibrary("MLIRVectorToXeGPU");
+    lib.linkSystemLibrary("MLIRMathToLibm");
+    lib.linkSystemLibrary("LLVMMSP430CodeGen");
+    lib.linkSystemLibrary("MLIRSubsetOpInterface");
+    lib.linkSystemLibrary("LLVMTransformUtils");
+    lib.linkSystemLibrary("MLIRTargetCpp");
+    lib.linkSystemLibrary("MLIRTransformUtils");
+    lib.linkSystemLibrary("MLIRQuantTransforms");
+    lib.linkSystemLibrary("LLVMMSP430Desc");
+    lib.linkSystemLibrary("MLIRArithToSPIRV");
+    lib.linkSystemLibrary("LLVMBitWriter");
+    lib.linkSystemLibrary("MLIRCAPIMath");
+    lib.linkSystemLibrary("MLIRAMXToLLVMIRTranslation");
+    lib.linkSystemLibrary("MLIRArmSMETransforms");
+    lib.linkSystemLibrary("LLVMSystemZInfo");
+    lib.linkSystemLibrary("MLIRControlFlowDialect");
+    lib.linkSystemLibrary("MLIROpenMPDialect");
+    lib.linkSystemLibrary("LLVMBinaryFormat");
+    lib.linkSystemLibrary("MLIRLLVMToLLVMIRTranslation");
+    lib.linkSystemLibrary("MLIRVectorToSCF");
+    lib.linkSystemLibrary("LLVMAArch64Disassembler");
+    lib.linkSystemLibrary("MLIRCAPIInterfaces");
+    lib.linkSystemLibrary("LLVMDWARFLinkerParallel");
+    lib.linkSystemLibrary("LLVMX86CodeGen");
+    lib.linkSystemLibrary("MLIRBuiltinToLLVMIRTranslation");
+    lib.linkSystemLibrary("MLIRCAPITransforms");
+    lib.linkSystemLibrary("LLVMXCoreDisassembler");
+    lib.linkSystemLibrary("LLVMCFIVerify");
+    lib.linkSystemLibrary("MLIRCAPILinalg");
+    lib.linkSystemLibrary("LLVMExegesis");
+    lib.linkSystemLibrary("MLIRArmSMEToSCF");
+    lib.linkSystemLibrary("LLVMDlltoolDriver");
+    // lib.linkSystemLibrary("MLIRMlirOptMain");
+    lib.linkSystemLibrary("MLIRComplexDialect");
+    lib.linkSystemLibrary("LLVMDemangle");
+    lib.linkSystemLibrary("MLIRNVVMTarget");
+    lib.linkSystemLibrary("LLVMCore");
+    lib.linkSystemLibrary("MLIRCAPIShape");
+    lib.linkSystemLibrary("LLVMAMDGPUInfo");
+    lib.linkSystemLibrary("LLVMSelectionDAG");
+    lib.linkSystemLibrary("LLVMHexagonDesc");
+    lib.linkSystemLibrary("MLIRCAPITransformDialectTransforms");
+    lib.linkSystemLibrary("MLIRControlFlowToLLVM");
+    lib.linkSystemLibrary("MLIRFuncToLLVM");
+    lib.linkSystemLibrary("MLIRShardingInterface");
+    lib.linkSystemLibrary("LLVMObject");
+    lib.linkSystemLibrary("MLIRCAPIQuant");
+    lib.linkSystemLibrary("MLIRTransformDialectUtils");
+    lib.linkSystemLibrary("MLIRArithToEmitC");
+    lib.linkSystemLibrary("LLVMLoongArchAsmParser");
+    lib.linkSystemLibrary("MLIRVectorToSPIRV");
+    lib.linkSystemLibrary("LLVMLanaiAsmParser");
+    lib.linkSystemLibrary("LLVMWebAssemblyAsmParser");
+    lib.linkSystemLibrary("LLVMMSP430AsmParser");
+    lib.linkSystemLibrary("MLIROpenMPToLLVMIRTranslation");
+    lib.linkSystemLibrary("LLVMMipsCodeGen");
+    lib.linkSystemLibrary("MLIRLinalgTransforms");
+    lib.linkSystemLibrary("MLIRTensorAllExtensions");
+    lib.linkSystemLibrary("MLIRFuncToEmitC");
+    lib.linkSystemLibrary("MLIRMemRefToSPIRV");
+    lib.linkSystemLibrary("LLVMSystemZDisassembler");
+    lib.linkSystemLibrary("MLIRNVVMToLLVMIRTranslation");
+    lib.linkSystemLibrary("MLIRCAPIIR");
+    lib.linkSystemLibrary("MLIRCAPIControlFlow");
+    lib.linkSystemLibrary("LLVMSPIRVCodeGen");
+    lib.linkSystemLibrary("LLVMJITLink");
+    lib.linkSystemLibrary("LLVMRISCVDisassembler");
+    lib.linkSystemLibrary("MLIRControlFlowTransforms");
+    lib.linkSystemLibrary("MLIRCAPIAsync");
+    lib.linkSystemLibrary("MLIRArithToLLVM");
+    lib.linkSystemLibrary("LLVMAggressiveInstCombine");
+    lib.linkSystemLibrary("MLIRParallelCombiningOpInterface");
+    lib.linkSystemLibrary("MLIRAffineAnalysis");
+    lib.linkSystemLibrary("MLIRVectorInterfaces");
+    lib.linkSystemLibrary("MLIRSPIRVToLLVM");
+    lib.linkSystemLibrary("MLIROptLib");
+    lib.linkSystemLibrary("LLVMSPIRVDesc");
+    lib.linkSystemLibrary("LLVMRISCVCodeGen");
+    lib.linkSystemLibrary("LLVMTableGenCommon");
+    lib.linkSystemLibrary("LLVMSparcDisassembler");
+    lib.linkSystemLibrary("LLVMTelemetry");
+    lib.linkSystemLibrary("MLIRX86VectorDialect");
+    lib.linkSystemLibrary("MLIRGPUToNVVMTransforms");
+    lib.linkSystemLibrary("LLVMWebAssemblyCodeGen");
+    lib.linkSystemLibrary("MLIRTranslateLib");
+    lib.linkSystemLibrary("MLIRLLVMIRToLLVMTranslation");
+    lib.linkSystemLibrary("MLIRVectorToLLVM");
+    lib.linkSystemLibrary("MLIRPDLLODS");
+    lib.linkSystemLibrary("MLIRCAPIROCDL");
+    lib.linkSystemLibrary("LLVMAArch64Info");
+    lib.linkSystemLibrary("MLIRCastInterfaces");
+    lib.linkSystemLibrary("MLIRConvertToLLVMPass");
+    lib.linkSystemLibrary("LLVMVECodeGen");
+    lib.linkSystemLibrary("LLVMXCoreCodeGen");
+    lib.linkSystemLibrary("LLVMSupport");
+    lib.linkSystemLibrary("LLVMVEAsmParser");
+    lib.linkSystemLibrary("MLIRROCDLToLLVMIRTranslation");
+    lib.linkSystemLibrary("MLIRMathToEmitC");
+    lib.linkSystemLibrary("MLIRXeGPUDialect");
+    lib.linkSystemLibrary("MLIRVectorUtils");
+    lib.linkSystemLibrary("LLVMXCoreDesc");
+    lib.linkSystemLibrary("MLIRVectorTransformOps");
+    lib.linkSystemLibrary("LLVMNVPTXCodeGen");
+    lib.linkSystemLibrary("MLIRCAPIIRDL");
+    lib.linkSystemLibrary("MLIRGPUTransformOps");
+    lib.linkSystemLibrary("MLIRTensorInferTypeOpInterfaceImpl");
+    lib.linkSystemLibrary("LLVMAMDGPUDisassembler");
+    lib.linkSystemLibrary("MLIROpenACCToLLVMIRTranslation");
+    lib.linkSystemLibrary("MLIRLoopLikeInterface");
+    lib.linkSystemLibrary("MLIRGPUPipelines");
+    lib.linkSystemLibrary("LLVMVEInfo");
+    lib.linkSystemLibrary("MLIRSCFTransformOps");
+    lib.linkSystemLibrary("MLIRCallInterfaces");
+    lib.linkSystemLibrary("LLVMAVRDisassembler");
+    lib.linkSystemLibrary("MLIRArmNeonToLLVMIRTranslation");
+    lib.linkSystemLibrary("MLIRRewritePDL");
+    lib.linkSystemLibrary("MLIRArithTransforms");
+    lib.linkSystemLibrary("MLIRMemRefTransformOps");
+    lib.linkSystemLibrary("MLIRVCIXDialect");
+    lib.linkSystemLibrary("MLIRTosaToSCF");
+    lib.linkSystemLibrary("MLIREmitCTransforms");
+    lib.linkSystemLibrary("LLVMXRay");
+    lib.linkSystemLibrary("MLIRCAPIOpenMP");
+    lib.linkSystemLibrary("LLVMRISCVTargetMCA");
+    lib.linkSystemLibrary("MLIRDialect");
+    lib.linkSystemLibrary("MLIRQuery");
+    lib.linkSystemLibrary("MLIRAffineToStandard");
+    lib.linkSystemLibrary("LLVMBitReader");
+    lib.linkSystemLibrary("MLIRRewrite");
+    lib.linkSystemLibrary("LLVMSPIRVAnalysis");
+    lib.linkSystemLibrary("MLIRLLVMCommonConversion");
+    lib.linkSystemLibrary("MLIRAsyncTransforms");
+    lib.linkSystemLibrary("LLVMX86Desc");
+    lib.linkSystemLibrary("MLIRTransformPDLExtension");
+    lib.linkSystemLibrary("MLIRBufferizationTransforms");
+    lib.linkSystemLibrary("LLVMLanaiDesc");
+    lib.linkSystemLibrary("MLIRMeshToMPI");
+    lib.linkSystemLibrary("LLVMExtensions");
+    lib.linkSystemLibrary("MLIRPDLLCodeGen");
+    lib.linkSystemLibrary("MLIRMaskableOpInterface");
+    lib.linkSystemLibrary("MLIRJitRunner");
+    lib.linkSystemLibrary("MLIRSCFToEmitC");
+    lib.linkSystemLibrary("LLVMFrontendAtomic");
+    lib.linkSystemLibrary("LLVMLanaiInfo");
+    lib.linkSystemLibrary("LLVMSparcAsmParser");
+    lib.linkSystemLibrary("MLIRDataLayoutInterfaces");
+    lib.linkSystemLibrary("LLVMRISCVInfo");
+    lib.linkSystemLibrary("MLIRPDLDialect");
+    lib.linkSystemLibrary("MLIRTosaTransforms");
+    lib.linkSystemLibrary("LLVMAMDGPUAsmParser");
+    lib.linkSystemLibrary("MLIRControlFlowToSCF");
+    lib.linkSystemLibrary("LLVMSystemZAsmParser");
+    lib.linkSystemLibrary("LLVMVectorize");
+    lib.linkSystemLibrary("LLVMRuntimeDyld");
+    lib.linkSystemLibrary("MLIRGPUToLLVMSPV");
+    lib.linkSystemLibrary("MLIRArithToAMDGPU");
+    lib.linkSystemLibrary("MLIRCAPIPDL");
+    lib.linkSystemLibrary("LLVMPowerPCCodeGen");
+    lib.linkSystemLibrary("LLVMBPFInfo");
+    lib.linkSystemLibrary("MLIRMLProgramDialect");
+    lib.linkSystemLibrary("LLVMScalarOpts");
+    lib.linkSystemLibrary("MLIRArmNeon2dToIntr");
+    lib.linkSystemLibrary("LLVMX86Disassembler");
+    lib.linkSystemLibrary("MLIRControlFlowInterfaces");
+    lib.linkSystemLibrary("LLVMOption");
+    lib.linkSystemLibrary("MLIRMemRefToLLVM");
+    lib.linkSystemLibrary("MLIRSCFToSPIRV");
+    lib.linkSystemLibrary("MLIRLLVMIRTransforms");
+    lib.linkSystemLibrary("MLIRCAPIFunc");
+    lib.linkSystemLibrary("LLVMXCoreInfo");
+    lib.linkSystemLibrary("LLVMInterfaceStub");
+    lib.linkSystemLibrary("MLIRComplexToSPIRV");
+    lib.linkSystemLibrary("MLIRVCIXToLLVMIRTranslation");
+    lib.linkSystemLibrary("LLVMDebugInfoLogicalView");
+    lib.linkSystemLibrary("MLIRSideEffectInterfaces");
+    lib.linkSystemLibrary("LLVMX86AsmParser");
+    lib.linkSystemLibrary("MLIRArmSVEDialect");
+    lib.linkSystemLibrary("MLIRReduceLib");
+    lib.linkSystemLibrary("LLVMTextAPI");
+    lib.linkSystemLibrary("MLIRReduce");
+    lib.linkSystemLibrary("LLVMInterpreter");
+    lib.linkSystemLibrary("LLVMMipsAsmParser");
+    lib.linkSystemLibrary("MLIRPDLInterpDialect");
+    lib.linkSystemLibrary("MLIRArithAttrToLLVMConversion");
+    lib.linkSystemLibrary("LLVMDWARFLinker");
+    lib.linkSystemLibrary("LLVMAsmParser");
+    lib.linkSystemLibrary("LLVMDebugInfoMSF");
+    lib.linkSystemLibrary("MLIRMathToFuncs");
+    lib.linkSystemLibrary("MLIRArmSVEToLLVMIRTranslation");
+    lib.linkSystemLibrary("MLIRSparseTensorPipelines");
+    lib.linkSystemLibrary("LLVMLinker");
+    lib.linkSystemLibrary("MLIRPass");
+    lib.linkSystemLibrary("MLIRControlFlowToSPIRV");
+    lib.linkSystemLibrary("MLIRTensorUtils");
+    lib.linkSystemLibrary("LLVMCoverage");
+    lib.linkSystemLibrary("MLIRSCFToControlFlow");
+    lib.linkSystemLibrary("LLVMMCParser");
+    lib.linkSystemLibrary("LLVMAVRCodeGen");
+    lib.linkSystemLibrary("MLIRTosaToLinalg");
+    lib.linkSystemLibrary("MLIRConvertToSPIRVPass");
+    lib.linkSystemLibrary("LLVMAArch64Utils");
+    lib.linkSystemLibrary("MLIRCAPITransformDialect");
+    lib.linkSystemLibrary("MLIRArithDialect");
+    lib.linkSystemLibrary("LLVMBPFAsmParser");
+    lib.linkSystemLibrary("MLIRCAPIConversion");
+    lib.linkSystemLibrary("MLIRAMDGPUTransforms");
+    lib.linkSystemLibrary("LLVMLanaiCodeGen");
+    lib.linkSystemLibrary("MLIRTosaToMLProgram");
+    lib.linkSystemLibrary("MLIRSPIRVTransforms");
+    lib.linkSystemLibrary("MLIRShapeToStandard");
+    lib.linkSystemLibrary("MLIRBufferizationToMemRef");
+    lib.linkSystemLibrary("LLVMAVRAsmParser");
+    lib.linkSystemLibrary("LLVMMC");
+    lib.linkSystemLibrary("MLIRDialectUtils");
+    lib.linkSystemLibrary("MLIRDLTITransformOps");
+    lib.linkSystemLibrary("MLIRMaskingOpInterface");
+    lib.linkSystemLibrary("LLVMTextAPIBinaryReader");
+    lib.linkSystemLibrary("LLVMAsmPrinter");
+    lib.linkSystemLibrary("LLVMVEDisassembler");
+    lib.linkSystemLibrary("MLIRFromLLVMIRTranslationRegistration");
+    lib.linkSystemLibrary("LLVMMCJIT");
+    lib.linkSystemLibrary("MLIRTransforms");
+    lib.linkSystemLibrary("MLIRAMDGPUToROCDL");
+    lib.linkSystemLibrary("LLVMCodeGenTypes");
+    lib.linkSystemLibrary("LLVMCFGuard");
+    lib.linkSystemLibrary("MLIRVectorToGPU");
+    lib.linkSystemLibrary("LLVMHipStdPar");
+    lib.linkSystemLibrary("LLVMCodeGen");
+    lib.linkSystemLibrary("LLVMX86TargetMCA");
+    lib.linkSystemLibrary("MLIRShapedOpInterfaces");
+    lib.linkSystemLibrary("LLVMFrontendOffloading");
+    lib.linkSystemLibrary("LLVMProfileData");
+    lib.linkSystemLibrary("MLIRNVGPUToNVVM");
+    lib.linkSystemLibrary("MLIRUBDialect");
+    lib.linkSystemLibrary("LLVMLTO");
+    lib.linkSystemLibrary("MLIRGPUToROCDLTransforms");
+    lib.linkSystemLibrary("MLIRTransformDebugExtension");
+    lib.linkSystemLibrary("MLIRBufferizationDialect");
+    lib.linkSystemLibrary("LLVMWebAssemblyDesc");
+    lib.linkSystemLibrary("MLIRLinalgToStandard");
+    lib.linkSystemLibrary("MLIRTosaToTensor");
+    lib.linkSystemLibrary("MLIRSPIRVDialect");
+    lib.linkSystemLibrary("MLIRToLLVMIRTranslationRegistration");
+    lib.linkSystemLibrary("MLIRCAPIRegisterEverything");
+    lib.linkSystemLibrary("LLVMWindowsManifest");
+    lib.linkSystemLibrary("LLVMHexagonAsmParser");
+    lib.linkSystemLibrary("LLVMOptDriver");
+    lib.linkSystemLibrary("MLIRIndexToSPIRV");
+    lib.linkSystemLibrary("MLIRReconcileUnrealizedCasts");
+    lib.linkSystemLibrary("MLIRLinalgTransformOps");
+    lib.linkSystemLibrary("LLVMWebAssemblyDisassembler");
+    lib.linkSystemLibrary("LLVMSandboxIR");
+    lib.linkSystemLibrary("LLVMPowerPCInfo");
+    lib.linkSystemLibrary("MLIRBytecodeReader");
+    lib.linkSystemLibrary("MLIRTensorMeshShardingExtensions");
+    lib.linkSystemLibrary("LLVMFrontendOpenMP");
+    lib.linkSystemLibrary("LLVMTableGenBasic");
+    lib.linkSystemLibrary("MLIRParser");
+    lib.linkSystemLibrary("MLIRSPIRVToLLVMIRTranslation");
+    lib.linkSystemLibrary("MLIRSparseTensorUtils");
+    lib.linkSystemLibrary("MLIRNVGPUDialect");
+    lib.linkSystemLibrary("MLIRFuncTransformOps");
+    lib.linkSystemLibrary("MLIRSPIRVUtils");
+    lib.linkSystemLibrary("LLVMAArch64CodeGen");
+    lib.linkSystemLibrary("MLIRComplexToLLVM");
+    lib.linkSystemLibrary("MLIRCAPIMemRef");
+    lib.linkSystemLibrary("LLVMPowerPCAsmParser");
+    lib.linkSystemLibrary("MLIRSupport");
+    lib.linkSystemLibrary("MLIRFuncToSPIRV");
+    lib.linkSystemLibrary("LLVMBPFDesc");
+    lib.linkSystemLibrary("LLVMSparcCodeGen");
+    lib.linkSystemLibrary("MLIRArithToArmSME");
+    lib.linkSystemLibrary("LLVMExegesisPowerPC");
+    lib.linkSystemLibrary("LLVMTarget");
+    lib.linkSystemLibrary("LLVMOrcJIT");
+    lib.linkSystemLibrary("MLIRAffineTransformOps");
+    lib.linkSystemLibrary("LLVMAVRDesc");
+    lib.linkSystemLibrary("MLIRMathToSPIRV");
+    lib.linkSystemLibrary("MLIRQueryMatcher");
+    lib.linkSystemLibrary("LLVMLibDriver");
+    lib.linkSystemLibrary("LLVMPowerPCDisassembler");
+    lib.linkSystemLibrary("MLIRROCDLDialect");
+    lib.linkSystemLibrary("MLIRSparseTensorTransforms");
+    lib.linkSystemLibrary("LLVMWebAssemblyUtils");
+    lib.linkSystemLibrary("LLVMPasses");
+    lib.linkSystemLibrary("MLIRGPUToSPIRV");
+    lib.linkSystemLibrary("LLVMLanaiDisassembler");
+    lib.linkSystemLibrary("LLVMMipsDisassembler");
+    lib.linkSystemLibrary("MLIRAffineUtils");
+    lib.linkSystemLibrary("LLVMTableGen");
+    lib.linkSystemLibrary("LLVMFileCheck");
+    lib.linkSystemLibrary("LLVMFuzzMutate");
+    lib.linkSystemLibrary("LLVMX86Info");
+    lib.linkSystemLibrary("MLIRViewLikeInterface");
+    lib.linkSystemLibrary("MLIRInferIntRangeCommon");
+    lib.linkSystemLibrary("LLVMFrontendOpenACC");
+    lib.linkSystemLibrary("MLIRPolynomialDialect");
+    lib.linkSystemLibrary("MLIRFunctionInterfaces");
+    lib.linkSystemLibrary("LLVMARMAsmParser");
+    lib.linkSystemLibrary("MLIRAffineTransforms");
+    lib.linkSystemLibrary("MLIRDLTIDialect");
+    lib.linkSystemLibrary("MLIRCAPIMLProgram");
+    lib.linkSystemLibrary("MLIRVectorToArmSME");
+    lib.linkSystemLibrary("MLIRSCFDialect");
+    lib.linkSystemLibrary("MLIRTblgenLib");
+    lib.linkSystemLibrary("MLIRComplexToStandard");
+    lib.linkSystemLibrary("LLVMSparcDesc");
+    lib.linkSystemLibrary("LLVMDebugInfoCodeView");
+    lib.linkSystemLibrary("MLIRSPIRVTarget");
+    lib.linkSystemLibrary("MLIRSparseTensorTransformOps");
+    lib.linkSystemLibrary("MLIRNVVMDialect");
+    lib.linkSystemLibrary("MLIRTosaDialect");
+    lib.linkSystemLibrary("LLVMDebuginfod");
+    lib.linkSystemLibrary("LLVMTargetParser");
+    lib.linkSystemLibrary("MLIRAsyncDialect");
+    lib.linkSystemLibrary("MLIRArmNeonTransforms");
+    lib.linkSystemLibrary("MLIRShapeOpsTransforms");
+    lib.linkSystemLibrary("LLVMSparcInfo");
+    lib.linkSystemLibrary("MLIRMemRefTransforms");
+    lib.linkSystemLibrary("MLIRConvertToLLVMInterface");
+    lib.linkSystemLibrary("MLIRInferTypeOpInterface");
+    lib.linkSystemLibrary("LLVMAMDGPUCodeGen");
+    lib.linkSystemLibrary("LLVMFrontendHLSL");
+    lib.linkSystemLibrary("LLVMMSP430Info");
+    lib.linkSystemLibrary("MLIRMPIDialect");
+    lib.linkSystemLibrary("MLIRIRDL");
+    lib.linkSystemLibrary("LLVMipo");
+    lib.linkSystemLibrary("MLIRNVGPUTransforms");
+    lib.linkSystemLibrary("MLIRQueryLib");
+    lib.linkSystemLibrary("LLVMARMCodeGen");
+    lib.linkSystemLibrary("LLVMPowerPCDesc");
+    lib.linkSystemLibrary("MLIRCAPISparseTensor");
+    lib.linkSystemLibrary("MLIRBufferizationTransformOps");
+    lib.linkSystemLibrary("LLVMExecutionEngine");
+    lib.linkSystemLibrary("MLIRIR");
+    lib.linkSystemLibrary("MLIRShapeDialect");
+    lib.linkSystemLibrary("LLVMMCDisassembler");
+    lib.linkSystemLibrary("MLIRAMDGPUDialect");
+    lib.linkSystemLibrary("LLVMMCA");
+    lib.linkSystemLibrary("LLVMWindowsDriver");
+    lib.linkSystemLibrary("LLVMARMUtils");
+    lib.linkSystemLibrary("MLIRSCFUtils");
+    lib.linkSystemLibrary("MLIRAMXTransforms");
+    lib.linkSystemLibrary("MLIREmitCDialect");
+    lib.linkSystemLibrary("LLVMDebugInfoBTF");
+    lib.linkSystemLibrary("MLIRQuantDialect");
+    lib.linkSystemLibrary("LLVMWebAssemblyInfo");
+    lib.linkSystemLibrary("MLIROpenMPToLLVM");
+    lib.linkSystemLibrary("LLVMBPFCodeGen");
+    lib.linkSystemLibrary("MLIRArmSMEDialect");
+    lib.linkSystemLibrary("MLIRFuncAllExtensions");
+    lib.linkSystemLibrary("MLIRPtrDialect");
+    lib.linkSystemLibrary("MLIRTosaToArith");
+    lib.linkSystemLibrary("MLIRMeshTransforms");
+    lib.linkSystemLibrary("MLIRUBToSPIRV");
+    lib.linkSystemLibrary("LLVMBitstreamReader");
+    lib.linkSystemLibrary("LLVMDebugInfoDWARF");
+    lib.linkSystemLibrary("MLIRVectorDialect");
+    lib.linkSystemLibrary("LLVMAVRInfo");
+    lib.linkSystemLibrary("MLIRSCFToGPU");
+    lib.linkSystemLibrary("LLVMCGData");
+    lib.linkSystemLibrary("LLVMIRPrinter");
+    lib.linkSystemLibrary("MLIRPDLToPDLInterp");
+    lib.linkSystemLibrary("MLIRTensorTransforms");
+    lib.linkSystemLibrary("MLIRLLVMDialect");
+    lib.linkSystemLibrary("LLVMSystemZDesc");
+    lib.linkSystemLibrary("MLIRExecutionEngineUtils");
+    lib.linkSystemLibrary("LLVMIRReader");
+    lib.linkSystemLibrary("MLIRRuntimeVerifiableOpInterface");
+    lib.linkSystemLibrary("MLIRMemRefUtils");
+    lib.linkSystemLibrary("MLIRSPIRVConversion");
+    lib.linkSystemLibrary("LLVMInstCombine");
+    lib.linkSystemLibrary("MLIRTransformDialectTransforms");
+    lib.linkSystemLibrary("LLVMNVPTXDesc");
+    lib.linkSystemLibrary("LLVMExegesisAArch64");
+    lib.linkSystemLibrary("LLVMLoongArchDisassembler");
+    lib.linkSystemLibrary("MLIROpenACCToSCF");
+    lib.linkSystemLibrary("MLIRGPUToLLVMIRTranslation");
+    lib.linkSystemLibrary("MLIRArmSMEToLLVM");
+    lib.linkSystemLibrary("LLVMAnalysis");
+    lib.linkSystemLibrary("LLVMDWARFLinkerClassic");
+    lib.linkSystemLibrary("LLVMCoroutines");
+    lib.linkSystemLibrary("LLVMRISCVDesc");
+    lib.linkSystemLibrary("MLIRDerivedAttributeOpInterface");
+    lib.linkSystemLibrary("MLIRVectorToLLVMPass");
+    lib.linkSystemLibrary("MLIRSCFTransforms");
+    lib.linkSystemLibrary("MLIRMathToROCDL");
+    lib.linkSystemLibrary("LLVMARMDesc");
+    lib.linkSystemLibrary("MLIRMemorySlotInterfaces");
+    lib.linkSystemLibrary("LLVMAMDGPUUtils");
+    lib.linkSystemLibrary("MLIRGPUTransforms");
+    lib.linkSystemLibrary("MLIRInferIntRangeInterface");
+    lib.linkSystemLibrary("MLIRTargetLLVM");
+    lib.linkSystemLibrary("LLVMSystemZCodeGen");
+    lib.linkSystemLibrary("MLIRGPUToGPURuntimeTransforms");
+    lib.linkSystemLibrary("MLIRDebug");
+    lib.linkSystemLibrary("MLIRTensorToSPIRV");
+    lib.linkSystemLibrary("LLVMMIRParser");
 
-    // This allows the user to pass arguments to the application in the build
-    // command itself, like this: `zig build run -- arg1 arg2 etc`
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    lib.addSystemIncludePath(b.path("third-party/install/llvm/include"));
 
-    // This creates a build step. It will be visible in the `zig build --help` menu,
-    // and can be selected like this: `zig build run`
-    // This will evaluate the `run` step rather than the default, which is "install".
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
+    b.installArtifact(lib);
 
-    const exe_unit_tests = b.addTest(.{
-        .root_module = exe_mod,
+    const lib_unit_tests = b.addTest(.{
+        .root_module = lib_mod,
     });
 
-    const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
+    const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
 
-    // Similar to creating the run step earlier, this exposes a `test` step to
-    // the `zig build --help` menu, providing a way for the user to request
-    // running the unit tests.
     const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_exe_unit_tests.step);
+    test_step.dependOn(&run_lib_unit_tests.step);
 }

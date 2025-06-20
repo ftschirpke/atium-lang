@@ -4,7 +4,14 @@
 const std = @import("std");
 const testing = std.testing;
 
+const cmlir = @cImport({
+    @cInclude("mlir-c/Debug.h");
+    @cInclude("mlir-c/Support.h");
+    @cInclude("mlir-c/RegisterEverything.h");
+});
+
 pub export fn add(a: i32, b: i32) i32 {
+    std.log.info("enabled: {}", .{cmlir.mlirIsGlobalDebugEnabled()});
     return a + b;
 }
 

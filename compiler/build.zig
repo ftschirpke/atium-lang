@@ -1,19 +1,15 @@
 const std = @import("std");
 
+const CompilerBuildError = error{MissingLibrary};
+
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
 // runner.
-pub fn build(b: *std.Build) void {
-    // Standard target options allows the person running `zig build` to choose
-    // what target to build for. Here we do not override the defaults, which
-    // means any target is allowed, and the default is native. Other options
-    // for restricting supported target set are available.
-    const target = b.standardTargetOptions(.{});
-
-    // Standard optimization options allow the person running `zig build` to select
-    // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
-    // set a preferred release mode, allowing the user to decide how to optimize.
-    const optimize = b.standardOptimizeOption(.{});
+pub fn build(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+) CompilerBuildError!void {
 
     // This creates a "module", which represents a collection of source files alongside
     // some compilation options, such as optimization mode and linked system libraries.
@@ -23,7 +19,7 @@ pub fn build(b: *std.Build) void {
         // only contains e.g. external object files, you can make this `null`.
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
-        .root_source_file = b.path("src/root.zig"),
+        .root_source_file = b.path("compiler/src/root.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -34,7 +30,7 @@ pub fn build(b: *std.Build) void {
         // only contains e.g. external object files, you can make this `null`.
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
-        .root_source_file = b.path("src/main.zig"),
+        .root_source_file = b.path("compiler/src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -43,6 +39,13 @@ pub fn build(b: *std.Build) void {
     // This is what allows Zig source code to use `@import("foo")` where 'foo' is not a
     // file path. In this case, we set up `exe_mod` to import `lib_mod`.
     exe_mod.addImport("compiler_lib", lib_mod);
+    std.log.debug("{any}", .{b.modules});
+    if (b.modules.get("mlir_zig")) |mlir_zig| {
+        exe_mod.addImport("mlir", mlir_zig);
+    } else {
+        std.log.err("Could not find mlir_zig library", .{});
+        return CompilerBuildError.MissingLibrary;
+    }
 
     // Now, we will create a static library based on the module we created above.
     // This creates a `std.Build.Step.Compile`, which is the build step responsible
@@ -110,7 +113,7 @@ pub fn build(b: *std.Build) void {
     // Similar to creating the run step earlier, this exposes a `test` step to
     // the `zig build --help` menu, providing a way for the user to request
     // running the unit tests.
-    const test_step = b.step("test", "Run unit tests");
+    const test_step = b.step("compiler-test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
     test_step.dependOn(&run_exe_unit_tests.step);
 }
