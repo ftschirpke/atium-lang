@@ -12,6 +12,6 @@ pub fn build(b: *std.Build) BuildError!void {
 
     const llvm = try third_party_build.build_llvm(b, optimize);
 
-    mlir_zig.build(b, target, optimize, llvm);
+    try mlir_zig.build(b, target, optimize, &llvm);
     try compiler.build(b, target, optimize);
 }
