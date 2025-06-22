@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 .{
     .name = .atium_lang,
     .version = "0.0.0",

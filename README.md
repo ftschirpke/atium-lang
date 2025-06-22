@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # atium
 A programming language project aimed at learning and experimentation.
 
@@ -13,8 +14,17 @@ Currently, the motivations and ideas for the project are:
     - create a borrow-checker (or something similar)
     - language design such that it restricts the programmer as little as possible
 
-### License
+### Licensing
+
+The source code in this repository is licensed under the MIT License (see [LICENSE](./LICENSE)).
 
 ```
 SPDX-License-Identifier: MIT
 ```
+
+#### Third-Party Code
+
+This project includes third-party code that is unmodified and licensed under the respective license:
+
+- the LLVM project (see `third-party/llvm-project`) is licensed under the Apache License v2.0 with LLVM
+  exceptions (see [LICENSE.txt](./third-party/llvm-project/LICENSE.txt))

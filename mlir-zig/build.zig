@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 const std = @import("std");
 
 const third_party = @import("../third-party/build.zig");
