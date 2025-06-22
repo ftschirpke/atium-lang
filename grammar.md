@@ -41,7 +41,7 @@ prefix_bool_op = "!"
 prefix_arith_op = "-" | "~"
 prefix_op = prefix_bool_op | prefix_arith_op
 
-assign_op = "=" | prefix_op"="
+assign_op = "=" | bin_arith_op"="
 
 expr = prefix_op expr
      | expr bin_op expr
