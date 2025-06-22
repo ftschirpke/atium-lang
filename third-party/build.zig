@@ -41,7 +41,6 @@ pub fn build_llvm(b: *std.Build, optimize: std.builtin.OptimizeMode) LLVMBuildEr
     llvm_config.addDirectoryArg(src);
 
     llvm_config.step.name = "configure-llvm-build";
-    // llvm_config.expectExitCode(0);
 
     const llvm_build = b.addSystemCommand(&.{
         "cmake",
@@ -52,7 +51,7 @@ pub fn build_llvm(b: *std.Build, optimize: std.builtin.OptimizeMode) LLVMBuildEr
     llvm_build.addArg("install");
 
     llvm_build.step.name = "run-llvm-build";
-    // llvm_build.expectExitCode(0);
+    llvm_build.expectExitCode(0);
 
     llvm_build.step.dependOn(&llvm_config.step);
 

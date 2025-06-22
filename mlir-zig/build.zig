@@ -24,10 +24,8 @@ pub fn build(
 
     lib.step.dependOn(&llvm.build_step.step);
 
-    const llvm_install_path = try llvm.install_path.join(b.allocator, "llvm");
-
-    lib.addSystemIncludePath(try llvm_install_path.join(b.allocator, "include"));
-    lib.addLibraryPath(try llvm_install_path.join(b.allocator, "lib"));
+    lib.addSystemIncludePath(try llvm.install_path.join(b.allocator, "include"));
+    lib.addLibraryPath(try llvm.install_path.join(b.allocator, "lib"));
     lib.linkSystemLibrary("MLIRSupport");
 
     b.installArtifact(lib);
