@@ -47,6 +47,9 @@ const Scanner = struct {
 const TokenKind = enum {
     INVALID,
 
+    DOT,
+    COLON,
+
     PLUS,
     MINUS,
     ASTERISK,
@@ -74,6 +77,20 @@ const TokenKind = enum {
     NUMBER,
 
     IDENTIFIER,
+
+    STRUCT,
+    FN,
+    OWN,
+    FOR,
+    WHILE,
+    IF,
+    IN,
+    AND,
+    OR,
+    ELSE,
+    BREAK,
+    CONTINUE,
+    RETURN,
 };
 
 const SourceInfo = struct {
@@ -89,6 +106,7 @@ const Token = struct {
 };
 
 const WHITESPACE = ' ';
+const NEWLINE = '\n';
 const TOKEN_BUFFER_LENGTH = 1024;
 
 const TokenCreationError = error{ ConstantTooLong, IdentifierTooLong };
@@ -98,6 +116,7 @@ const Lexer = struct {
     path: *[]const u8,
     line: u64,
     col: u64,
+    allocator: std.mem.Allocator,
 
     const Self = @This();
 
@@ -121,9 +140,9 @@ const Lexer = struct {
             '\n' => {
                 self.line += 1;
                 self.col = 0;
-                return WHITESPACE;
+                return NEWLINE;
             },
-            ' ' | '\t' => return WHITESPACE,
+            ' ', '\t' => return WHITESPACE,
             else => return byte,
         }
     }
@@ -134,12 +153,12 @@ const Lexer = struct {
 
     fn next_token(self: *Self) TokenCreationError!?Token {
         var first_byte = self.consume_byte() orelse return null;
-        while (first_byte == WHITESPACE) {
+        while (first_byte == WHITESPACE or first_byte == NEWLINE) {
             first_byte = self.consume_byte() orelse return null;
         }
 
         var token = Token{
-            .kind = undefined,
+            .kind = TokenKind.INVALID,
             .str = null,
             .source = .{
                 .path = self.path,
@@ -151,12 +170,19 @@ const Lexer = struct {
         var buffer: [TOKEN_BUFFER_LENGTH]u8 = &.{first_byte} ++ &.{0} ** (TOKEN_BUFFER_LENGTH - 1);
 
         switch (first_byte) {
+            '.' => token.kind = TokenKind.DOT,
+            ':' => token.kind = TokenKind.COLON,
             '(' => token.kind = TokenKind.LPAREN,
             ')' => token.kind = TokenKind.RPAREN,
             '{' => token.kind = TokenKind.LBRACE,
             '}' => token.kind = TokenKind.RBRACE,
             '[' => token.kind = TokenKind.LBRACKET,
             ']' => token.kind = TokenKind.RBRACKET,
+            '+' => token.kind = TokenKind.PLUS,
+            '-' => token.kind = TokenKind.MINUS,
+            '*' => token.kind = TokenKind.ASTERISK,
+            '/' => token.kind = TokenKind.SLASH,
+            '?' => token.kind = TokenKind.QUESTION,
             '!' => {
                 if (self.peek_byte() != null and self.peek_byte().? == '=') {
                     self.consume_byte();
@@ -190,6 +216,7 @@ const Lexer = struct {
                 }
             },
             '0'...'9' => {
+                token.kind = TokenKind.NUMBER;
                 var len = 1;
                 while (self.peek_byte()) |byte| {
                     switch (byte) {
@@ -209,7 +236,92 @@ const Lexer = struct {
                         else => break,
                     }
                 }
-                // TODO: create token for number
+                token.str = try self.allocator.dupe(u8, buffer[0..len]);
+            },
+            'a'...'z', 'A'...'Z', '_' => {
+                var len = 1;
+                while (self.peek_byte()) |byte| {
+                    switch (byte) {
+                        'a'...'z', 'A'...'Z', '_', '0'...'9' => {
+                            if (len >= TOKEN_BUFFER_LENGTH) {
+                                // TODO: standardize errors and error messages
+                                std.log.err(
+                                    "Identifier '{s}' is too long and continues after {} characters",
+                                    buffer,
+                                    TOKEN_BUFFER_LENGTH,
+                                );
+                                return TokenCreationError.ConstantTooLong;
+                            }
+                            buffer[len] = self.consume_byte.?;
+                            len += 1;
+                        },
+                        else => break,
+                    }
+                }
+
+                switch (first_byte) {
+                    'a' => {
+                        if (std.mem.eql(u8, buffer[1..len], "nd")) {
+                            token.kind = TokenKind.AND;
+                        }
+                    },
+                    'b' => {
+                        if (std.mem.eql(u8, buffer[1..len], "reak")) {
+                            token.kind = TokenKind.BREAK;
+                        }
+                    },
+                    'c' => {
+                        if (std.mem.eql(u8, buffer[1..len], "ontinue")) {
+                            token.kind = TokenKind.CONTINUE;
+                        }
+                    },
+                    'e' => {
+                        if (std.mem.eql(u8, buffer[1..len], "lse")) {
+                            token.kind = TokenKind.ELSE;
+                        }
+                    },
+                    'f' => {
+                        if (std.mem.eql(u8, buffer[1..len], "n")) {
+                            token.kind = TokenKind.FN;
+                        } else if (std.mem.eql(u8, buffer[1..len], "or")) {
+                            token.kind = TokenKind.FOR;
+                        }
+                    },
+                    'i' => {
+                        if (std.mem.eql(u8, buffer[1..len], "f")) {
+                            token.kind = TokenKind.IF;
+                        } else if (std.mem.eql(u8, buffer[1..len], "n")) {
+                            token.kind = TokenKind.IN;
+                        }
+                    },
+                    'o' => {
+                        if (std.mem.eql(u8, buffer[1..len], "r")) {
+                            token.kind = TokenKind.OR;
+                        } else if (std.mem.eql(u8, buffer[1..len], "wn")) {
+                            token.kind = TokenKind.OWN;
+                        }
+                    },
+                    'r' => {
+                        if (std.mem.eql(u8, buffer[1..len], "eturn")) {
+                            token.kind = TokenKind.RETURN;
+                        }
+                    },
+                    's' => {
+                        if (std.mem.eql(u8, buffer[1..len], "truct")) {
+                            token.kind = TokenKind.STRUCT;
+                        }
+                    },
+                    'w' => {
+                        if (std.mem.eql(u8, buffer[1..len], "hile")) {
+                            token.kind = TokenKind.WHILE;
+                        }
+                    },
+                }
+
+                if (token.kind == TokenKind.INVALID) {
+                    token.kind = TokenKind.IDENTIFIER;
+                    token.str = self.allocator.dupe(u8, buffer[0..len]);
+                }
             },
         }
     }

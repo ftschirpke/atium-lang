@@ -1,47 +1,33 @@
 // SPDX-License-Identifier: MIT
-const mlir = @import("mlir");
+// const mlir = @import("mlir");
+const std = @import("std");
+
+const lib = @import("compiler_lib");
 
 pub fn main() !void {
-    // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
+    var general_purpose_allocator: std.heap.GeneralPurposeAllocator(.{}) = .init;
+    const gpa = general_purpose_allocator.allocator();
+    var args = try std.process.argsWithAllocator(gpa);
+    defer args.deinit();
 
-    // stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
+    std.debug.assert(args.skip());
+
     const stdout_file = std.io.getStdOut().writer();
     var bw = std.io.bufferedWriter(stdout_file);
     const stdout = bw.writer();
 
-    try stdout.print("Run `zig build test` to run the tests.\n", .{});
+    const filepath = args.next();
+    if (filepath) |path| {
+        std.fs.cwd().access(path, .{}) catch |err| {
+            std.log.err("Error occured when accessing the specified file '{s}': {}", .{ path, err });
+        };
+    }
 
-    try stdout.print("Result of {} + {} = {}.\n", .{ 4, 2, mlir.add(4, 2) });
+    // try stdout.print("Result of {} + {} = {}.\n", .{ 4, 2, mlir.add(4, 2) });
 
-    try bw.flush(); // Don't forget to flush!
+    try bw.flush();
 }
 
-test "simple test" {
-    var list = std.ArrayList(i32).init(std.testing.allocator);
-    defer list.deinit(); // Try commenting this out and see if zig detects the memory leak!
-    try list.append(42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
+fn lex(filepath: *[:0]const u8) !void {
+    // TODO: implement
 }
-
-test "use other module" {
-    try std.testing.expectEqual(@as(i32, 150), lib.add(100, 50));
-}
-
-test "fuzz example" {
-    const Context = struct {
-        fn testOne(context: @This(), input: []const u8) anyerror!void {
-            _ = context;
-            // Try passing `--fuzz` to `zig build test` and see if it manages to fail this test case!
-            try std.testing.expect(!std.mem.eql(u8, "canyoufindme", input));
-        }
-    };
-    try std.testing.fuzz(Context{}, Context.testOne, .{});
-}
-
-const std = @import("std");
-
-/// This imports the separate module containing `root.zig`. Take a look in `build.zig` for details.
-const lib = @import("compiler_lib");
