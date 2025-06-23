@@ -2,7 +2,7 @@
 const std = @import("std");
 
 const READER_BUFFER_SIZE = 4096;
-const BufferedReader = std.io.BufferedReader(READER_BUFFER_SIZE, std.io.Reader);
+const BufferedReader = std.io.BufferedReader(READER_BUFFER_SIZE, std.fs.File.Reader);
 
 const Scanner = struct {
     file: std.fs.File,
@@ -12,9 +12,9 @@ const Scanner = struct {
 
     const Self = @This();
 
-    fn init(path: *[]const u8) std.fs.File.OpenError!Self {
-        const file = try std.fs.openFileAbsolute(path);
-        const buffered_reader = std.io.bufferedReader(READER_BUFFER_SIZE, file.reader());
+    fn init(path: []const u8) std.fs.File.OpenError!Self {
+        const file = try std.fs.openFileAbsolute(path, .{});
+        var buffered_reader = std.io.bufferedReaderSize(READER_BUFFER_SIZE, file.reader());
         return Self{
             .file = file,
             ._buffered_reader = buffered_reader,
@@ -29,26 +29,36 @@ const Scanner = struct {
 
     fn consume(self: *Self) ?u8 {
         if (self.cur == null) {
-            self.cur = self.reader.readByte() orelse return null;
+            self.cur = self.reader.readByte() catch {
+                return null;
+            };
         }
         const out = self.cur.?;
-        self.cur = self.reader.readByte() orelse return null;
+        self.cur = self.reader.readByte() catch {
+            return null;
+        };
         return out;
     }
 
     fn peek(self: *Self) ?u8 {
         if (self.cur == null) {
-            self.cur = self.reader.readByte() orelse return null;
+            self.cur = self.reader.readByte() catch {
+                return null;
+            };
         }
         return self.cur;
     }
 };
 
-const TokenKind = enum {
+pub const TokenKind = enum {
     INVALID,
 
     DOT,
+    COMMA,
     COLON,
+    SEMICOLON,
+
+    DOUBLE_DOT,
 
     PLUS,
     MINUS,
@@ -91,15 +101,17 @@ const TokenKind = enum {
     BREAK,
     CONTINUE,
     RETURN,
+    LET,
+    MUT,
 };
 
 const SourceInfo = struct {
-    path: *[]const u8,
+    path: []const u8,
     line: u64,
     col: u64,
 };
 
-const Token = struct {
+pub const Token = struct {
     kind: TokenKind,
     str: ?[]const u8,
     source: SourceInfo,
@@ -109,27 +121,28 @@ const WHITESPACE = ' ';
 const NEWLINE = '\n';
 const TOKEN_BUFFER_LENGTH = 1024;
 
-const TokenCreationError = error{ ConstantTooLong, IdentifierTooLong };
+const TokenCreationError = error{ ConstantTooLong, IdentifierTooLong, OutOfMemory };
 
-const Lexer = struct {
+pub const Lexer = struct {
     scanner: Scanner,
-    path: *[]const u8,
+    path: []const u8,
     line: u64,
     col: u64,
     allocator: std.mem.Allocator,
 
     const Self = @This();
 
-    fn init(path: *[]const u8) std.fs.File.OpenError!Self {
+    pub fn init(allocator: std.mem.Allocator, path: []const u8) std.fs.File.OpenError!Self {
         return Self{
             .scanner = try Scanner.init(path),
             .path = path,
             .line = 1,
             .col = 0,
+            .allocator = allocator,
         };
     }
 
-    fn deinit(self: Self) void {
+    pub fn deinit(self: Self) void {
         self.scanner.deinit();
     }
 
@@ -151,7 +164,7 @@ const Lexer = struct {
         return self.scanner.peek();
     }
 
-    fn next_token(self: *Self) TokenCreationError!?Token {
+    pub fn next_token(self: *Self) TokenCreationError!?Token {
         var first_byte = self.consume_byte() orelse return null;
         while (first_byte == WHITESPACE or first_byte == NEWLINE) {
             first_byte = self.consume_byte() orelse return null;
@@ -167,11 +180,20 @@ const Lexer = struct {
             },
         };
 
-        var buffer: [TOKEN_BUFFER_LENGTH]u8 = &.{first_byte} ++ &.{0} ** (TOKEN_BUFFER_LENGTH - 1);
+        var buffer: [TOKEN_BUFFER_LENGTH]u8 = [_]u8{first_byte} ++ [_]u8{0} ** (TOKEN_BUFFER_LENGTH - 1);
 
         switch (first_byte) {
-            '.' => token.kind = TokenKind.DOT,
+            '.' => {
+                if (self.peek_byte() != null and self.peek_byte().? == '.') {
+                    _ = self.consume_byte();
+                    token.kind = TokenKind.DOUBLE_DOT;
+                } else {
+                    token.kind = TokenKind.DOT;
+                }
+            },
+            ',' => token.kind = TokenKind.COMMA,
             ':' => token.kind = TokenKind.COLON,
+            ';' => token.kind = TokenKind.SEMICOLON,
             '(' => token.kind = TokenKind.LPAREN,
             ')' => token.kind = TokenKind.RPAREN,
             '{' => token.kind = TokenKind.LBRACE,
@@ -185,7 +207,7 @@ const Lexer = struct {
             '?' => token.kind = TokenKind.QUESTION,
             '!' => {
                 if (self.peek_byte() != null and self.peek_byte().? == '=') {
-                    self.consume_byte();
+                    _ = self.consume_byte();
                     token.kind = TokenKind.NOT_EQUAL;
                 } else {
                     token.kind = TokenKind.EXCLAMATION;
@@ -193,7 +215,7 @@ const Lexer = struct {
             },
             '=' => {
                 if (self.peek_byte() != null and self.peek_byte().? == '=') {
-                    self.consume_byte();
+                    _ = self.consume_byte();
                     token.kind = TokenKind.EQUAL;
                 } else {
                     token.kind = TokenKind.ASSIGN;
@@ -201,7 +223,7 @@ const Lexer = struct {
             },
             '>' => {
                 if (self.peek_byte() != null and self.peek_byte().? == '=') {
-                    self.consume_byte();
+                    _ = self.consume_byte();
                     token.kind = TokenKind.GREATER_EQUAL;
                 } else {
                     token.kind = TokenKind.GREATER;
@@ -209,7 +231,7 @@ const Lexer = struct {
             },
             '<' => {
                 if (self.peek_byte() != null and self.peek_byte().? == '=') {
-                    self.consume_byte();
+                    _ = self.consume_byte();
                     token.kind = TokenKind.LESS_EQUAL;
                 } else {
                     token.kind = TokenKind.LESS;
@@ -217,7 +239,7 @@ const Lexer = struct {
             },
             '0'...'9' => {
                 token.kind = TokenKind.NUMBER;
-                var len = 1;
+                var len: usize = 1;
                 while (self.peek_byte()) |byte| {
                     switch (byte) {
                         '0'...'9' => {
@@ -225,8 +247,7 @@ const Lexer = struct {
                                 // TODO: standardize errors and error messages
                                 std.log.err(
                                     "Number '{s}' is too long and continues after {} digits",
-                                    buffer,
-                                    TOKEN_BUFFER_LENGTH,
+                                    .{ buffer, TOKEN_BUFFER_LENGTH },
                                 );
                                 return TokenCreationError.ConstantTooLong;
                             }
@@ -239,7 +260,7 @@ const Lexer = struct {
                 token.str = try self.allocator.dupe(u8, buffer[0..len]);
             },
             'a'...'z', 'A'...'Z', '_' => {
-                var len = 1;
+                var len: usize = 1;
                 while (self.peek_byte()) |byte| {
                     switch (byte) {
                         'a'...'z', 'A'...'Z', '_', '0'...'9' => {
@@ -247,12 +268,11 @@ const Lexer = struct {
                                 // TODO: standardize errors and error messages
                                 std.log.err(
                                     "Identifier '{s}' is too long and continues after {} characters",
-                                    buffer,
-                                    TOKEN_BUFFER_LENGTH,
+                                    .{ buffer, TOKEN_BUFFER_LENGTH },
                                 );
                                 return TokenCreationError.ConstantTooLong;
                             }
-                            buffer[len] = self.consume_byte.?;
+                            buffer[len] = self.consume_byte().?;
                             len += 1;
                         },
                         else => break,
@@ -294,6 +314,16 @@ const Lexer = struct {
                             token.kind = TokenKind.IN;
                         }
                     },
+                    'l' => {
+                        if (std.mem.eql(u8, buffer[1..len], "et")) {
+                            token.kind = TokenKind.LET;
+                        }
+                    },
+                    'm' => {
+                        if (std.mem.eql(u8, buffer[1..len], "ut")) {
+                            token.kind = TokenKind.MUT;
+                        }
+                    },
                     'o' => {
                         if (std.mem.eql(u8, buffer[1..len], "r")) {
                             token.kind = TokenKind.OR;
@@ -316,13 +346,20 @@ const Lexer = struct {
                             token.kind = TokenKind.WHILE;
                         }
                     },
+                    else => {},
                 }
 
                 if (token.kind == TokenKind.INVALID) {
                     token.kind = TokenKind.IDENTIFIER;
-                    token.str = self.allocator.dupe(u8, buffer[0..len]);
+                    token.str = try self.allocator.dupe(u8, buffer[0..len]);
                 }
             },
+            else => {
+                token.kind = TokenKind.INVALID;
+                token.str = try self.allocator.dupe(u8, buffer[0..1]);
+            },
         }
+
+        return token;
     }
 };
