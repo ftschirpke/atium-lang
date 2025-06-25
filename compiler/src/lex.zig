@@ -59,6 +59,7 @@ pub const TokenKind = enum {
     SEMICOLON,
 
     DOUBLE_DOT,
+    ARROW,
 
     PLUS,
     MINUS,
@@ -201,7 +202,14 @@ pub const Lexer = struct {
             '[' => token.kind = TokenKind.LBRACKET,
             ']' => token.kind = TokenKind.RBRACKET,
             '+' => token.kind = TokenKind.PLUS,
-            '-' => token.kind = TokenKind.MINUS,
+            '-' => {
+                if (self.peek_byte() != null and self.peek_byte().? == '>') {
+                    _ = self.consume_byte();
+                    token.kind = TokenKind.ARROW;
+                } else {
+                    token.kind = TokenKind.MINUS;
+                }
+            },
             '*' => token.kind = TokenKind.ASTERISK,
             '/' => token.kind = TokenKind.SLASH,
             '?' => token.kind = TokenKind.QUESTION,
