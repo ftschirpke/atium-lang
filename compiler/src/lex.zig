@@ -246,12 +246,12 @@ pub const Lexer = struct {
                             if (len >= TOKEN_BUFFER_LENGTH) {
                                 // TODO: standardize errors and error messages
                                 std.log.err(
-                                    "Number '{s}' is too long and continues after {} digits",
-                                    .{ buffer, TOKEN_BUFFER_LENGTH },
+                                    "Number '{any}' (at {any}) is too long and continues after {} digits",
+                                    .{ buffer, token.source, TOKEN_BUFFER_LENGTH },
                                 );
                                 return TokenCreationError.ConstantTooLong;
                             }
-                            buffer[len] = byte;
+                            buffer[len] = self.consume_byte().?;
                             len += 1;
                         },
                         else => break,
@@ -267,8 +267,8 @@ pub const Lexer = struct {
                             if (len >= TOKEN_BUFFER_LENGTH) {
                                 // TODO: standardize errors and error messages
                                 std.log.err(
-                                    "Identifier '{s}' is too long and continues after {} characters",
-                                    .{ buffer, TOKEN_BUFFER_LENGTH },
+                                    "Identifier '{s} (at {any}) is too long and continues after {} characters",
+                                    .{ buffer, token.source, TOKEN_BUFFER_LENGTH },
                                 );
                                 return TokenCreationError.ConstantTooLong;
                             }
