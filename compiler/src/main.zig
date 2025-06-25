@@ -37,10 +37,22 @@ fn lex(allocator: std.mem.Allocator, writer: anytype, filepath: []const u8) !voi
     defer lexer.deinit();
 
     var opt_token = try lexer.next_token();
+    var line: u64 = 0;
     while (opt_token != null) {
         const token = opt_token.?;
+        while (line < token.source.line) {
+            try writer.print("\n{d:4} > ", .{line + 1});
+            line += 1;
+        }
         switch (token.kind) {
-            TokenKind.IDENTIFIER, TokenKind.NUMBER, TokenKind.INVALID => {
+            TokenKind.IDENTIFIER, TokenKind.NUMBER => {
+                try writer.print("{any}(\"{s}\") ", .{ token.kind, token.str.? });
+            },
+            TokenKind.INVALID => {
+                std.log.err(
+                    "FOUND {any} - \"{s}\" at line {} col {}",
+                    .{ token.kind, token.str.?, token.source.line, token.source.col },
+                );
                 try writer.print("{any}(\"{s}\") ", .{ token.kind, token.str.? });
             },
             else => {
@@ -50,4 +62,5 @@ fn lex(allocator: std.mem.Allocator, writer: anytype, filepath: []const u8) !voi
 
         opt_token = try lexer.next_token();
     }
+    try writer.print("\n", .{});
 }
