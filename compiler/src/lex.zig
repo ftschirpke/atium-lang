@@ -5,6 +5,7 @@ const READER_BUFFER_SIZE = 4096;
 const BufferedReader = std.io.BufferedReader(READER_BUFFER_SIZE, std.fs.File.Reader);
 
 const Scanner = struct {
+    path: []const u8,
     file: std.fs.File,
     _buffered_reader: BufferedReader,
     reader: BufferedReader.Reader,
@@ -16,6 +17,7 @@ const Scanner = struct {
         const file = try std.fs.openFileAbsolute(path, .{});
         var buffered_reader = std.io.bufferedReaderSize(READER_BUFFER_SIZE, file.reader());
         return Self{
+            .path = path,
             .file = file,
             ._buffered_reader = buffered_reader,
             .reader = buffered_reader.reader(),
@@ -114,8 +116,8 @@ const SourceInfo = struct {
 
 pub const Token = struct {
     kind: TokenKind,
-    str: ?[]const u8,
     source: SourceInfo,
+    str: ?[]const u8,
 };
 
 const WHITESPACE = ' ';
@@ -128,8 +130,8 @@ pub const Lexer = struct {
     scanner: Scanner,
     path: []const u8,
     line: u64,
-    col: u64,
     allocator: std.mem.Allocator,
+    line_buffer: std.ArrayList(u8),
 
     const Self = @This();
 
@@ -138,27 +140,29 @@ pub const Lexer = struct {
             .scanner = try Scanner.init(path),
             .path = path,
             .line = 1,
-            .col = 0,
             .allocator = allocator,
+            .line_buffer = std.ArrayList(u8).init(allocator),
         };
     }
 
     pub fn deinit(self: Self) void {
         self.scanner.deinit();
+        self.line_buffer.deinit();
     }
 
     fn consume_byte(self: *Self) ?u8 {
         const byte = self.scanner.consume() orelse return null;
-        self.col += 1;
-        switch (byte) {
-            '\n' => {
-                self.line += 1;
-                self.col = 0;
-                return NEWLINE;
-            },
-            ' ', '\t' => return WHITESPACE,
-            else => return byte,
+        if (byte == '\n') {
+            self.line += 1;
+            self.line_buffer.clearRetainingCapacity();
+            return NEWLINE;
         }
+
+        self.line_buffer.append(byte);
+        if (byte == ' ' or byte == '\t') {
+            return WHITESPACE;
+        }
+        return byte;
     }
 
     fn peek_byte(self: *Self) ?u8 {
@@ -173,12 +177,12 @@ pub const Lexer = struct {
 
         var token = Token{
             .kind = TokenKind.INVALID,
-            .str = null,
             .source = .{
                 .path = self.path,
                 .line = self.line,
-                .col = self.col,
+                .col = self.line_buffer.items.len,
             },
+            .str = null,
         };
 
         var buffer: [TOKEN_BUFFER_LENGTH]u8 = [_]u8{first_byte} ++ [_]u8{0} ** (TOKEN_BUFFER_LENGTH - 1);
@@ -369,5 +373,9 @@ pub const Lexer = struct {
         }
 
         return token;
+    }
+
+    pub fn print_error(source: *SourceInfo, highlight_len: usize, fmt: []const u8, args: anytype) !void {
+        // TODO: implement
     }
 };
