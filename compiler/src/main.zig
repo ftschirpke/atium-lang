@@ -47,7 +47,7 @@ fn lex(allocator: std.mem.Allocator, writer: anytype, filepath: []const u8) !voi
         }
         switch (token.kind) {
             TokenKind.IDENTIFIER, TokenKind.INVALID, TokenKind.NUMBER, TokenKind.STRING_LITERAL => {
-                try writer.print("{s}(\"{s}\") ", .{ @tagName(token.kind), token.str.? });
+                try writer.print("{s}(\"{s}\") ", .{ @tagName(token.kind), token.str orelse return });
             },
             else => {
                 try writer.print("{s} ", .{@tagName(token.kind)});
