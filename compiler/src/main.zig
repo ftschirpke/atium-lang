@@ -19,6 +19,7 @@ pub fn main() !void {
     const stdout = bw.writer();
 
     try stdout.print("Result of {} + {} = {}.\n", .{ 4, 2, mlir.add(4, 2) });
+    try bw.flush();
 
     const filepath = args.next();
     if (filepath) |path| {
@@ -45,21 +46,13 @@ fn lex(allocator: std.mem.Allocator, writer: anytype, filepath: []const u8) !voi
             line += 1;
         }
         switch (token.kind) {
-            TokenKind.IDENTIFIER, TokenKind.NUMBER => {
-                try writer.print("{any}(\"{s}\") ", .{ token.kind, token.str.? });
-            },
-            TokenKind.INVALID => {
-                std.log.err(
-                    "FOUND {any} - \"{s}\" at line {} col {}",
-                    .{ token.kind, token.str.?, token.source.line, token.source.col },
-                );
-                try writer.print("{any}(\"{s}\") ", .{ token.kind, token.str.? });
+            TokenKind.IDENTIFIER, TokenKind.INVALID, TokenKind.NUMBER, TokenKind.STRING_LITERAL => {
+                try writer.print("{s}(\"{s}\") ", .{ @tagName(token.kind), token.str.? });
             },
             else => {
-                try writer.print("{any} ", .{token.kind});
+                try writer.print("{s} ", .{@tagName(token.kind)});
             },
         }
-
         opt_token = try lexer.next_token();
     }
     try writer.print("\n", .{});
