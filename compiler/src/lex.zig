@@ -267,7 +267,34 @@ pub const Lexer = struct {
                     token.kind = TokenKind.ASTERISK;
                 }
             },
-            '/' => token.kind = TokenKind.SLASH,
+            '/' => {
+                var next = self.peek_ascii();
+                var is_comment = (next != null and next.? == '/');
+                while (is_comment) {
+                    _ = self.consume_ascii();
+
+                    while (self.scanner.consume()) |codepoint| {
+                        if (codepoint.len == 1 and codepoint[0] == '\n') {
+                            break;
+                        }
+                    }
+                    while (self.peek_ascii()) |byte| {
+                        if (!std.ascii.isWhitespace(byte)) {
+                            break;
+                        }
+                        _ = self.consume_ascii();
+                    }
+
+                    const first_next_line = self.peek_ascii();
+                    if (first_next_line == null or first_next_line.? != '/') {
+                        return self.next_token();
+                    }
+                    std.debug.assert(self.consume_ascii().? == '/');
+                    next = self.peek_ascii();
+                    is_comment = (next != null and next.? == '/');
+                }
+                token.kind = TokenKind.SLASH;
+            },
             '?' => token.kind = TokenKind.QUESTION,
             '!' => {
                 const next = self.peek_ascii();
@@ -309,9 +336,13 @@ pub const Lexer = struct {
                 buffer.clearRetainingCapacity();
                 var terminated: bool = false;
                 while (self.scanner.consume()) |codepoint| {
-                    if (codepoint.len == 1 and codepoint[0] == '"') {
-                        terminated = true;
-                        break;
+                    if (codepoint.len == 1) {
+                        if (codepoint[0] == '"') {
+                            terminated = true;
+                            break;
+                        } else if (codepoint[0] == '\n') {
+                            break;
+                        }
                     }
                     try buffer.appendSlice(codepoint);
                 }
