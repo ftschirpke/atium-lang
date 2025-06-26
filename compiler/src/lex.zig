@@ -174,15 +174,15 @@ pub const Lexer = struct {
     fn move_to_ascii(self: *Self) void {
         var codepoint = self.scanner.peek() orelse return;
         while (codepoint.len > 1) {
+            _ = self.scanner.consume();
             self.print_error(
                 &.{ .path = self.path, .line = self.scanner.line_num, .col = self.scanner.col },
                 1,
-                "Invalid Character Error: Unicode character outside of a string literal: \"{s}\"",
+                "Invalid Character Error: Unicode character '{s}'",
                 .{codepoint},
                 "please remove, unicode character '{s}' may only be used inside a string literal",
                 .{codepoint},
             ) catch {};
-            _ = self.scanner.consume();
             codepoint = self.scanner.peek() orelse return;
         }
     }
@@ -203,7 +203,7 @@ pub const Lexer = struct {
 
     pub fn next_token(self: *Self) !?Token {
         var first_byte = self.consume_ascii() orelse return null;
-        while (first_byte == ' ' or first_byte == '\t' or first_byte == '\n') {
+        while (std.ascii.isWhitespace(first_byte)) {
             first_byte = self.consume_ascii() orelse return null;
         }
 
