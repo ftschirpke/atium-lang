@@ -35,7 +35,7 @@ type = void
      | "(" type
 
 bin_bool_op = "==" | "!=" | "<" | ">" | "<=" | ">="
-bin_arith_op = "+" | "-" | "/" | "*" | "<<" | ">>" | "&" | "|" | "^"
+bin_arith_op = "+" | "-" | "/" | "*" | "<<" | ">>" | "&" | "|" | "^" | "++" | "**"
 bin_op = bin_bool_op | bin_arith_op
 prefix_bool_op = "!"
 prefix_arith_op = "-" | "~"
@@ -43,19 +43,26 @@ prefix_op = prefix_bool_op | prefix_arith_op
 
 assign_op = "=" | bin_arith_op"="
 
+capture = "|" ident "|"
+
 expr = prefix_op expr
      | expr bin_op expr
      | "(" expr ")" 
-     | expr "." "*" 
-     | expr "." "&"
-     | expr "." "!"
+     | expr ".*" 
+     | expr ".&"
+     | expr ".!"
+     | expr ".?"
      | expr "." expr
      | expr "(" expr* ")"
+     | expr "onerr" capture? expr
+     | expr "onerr" capture? "do" "{" stmt* "}"
+     | expr "else" expr
+     | expr "else" "do" "{" stmt* "}"
 
 var = ident | "(" var "," var [ "," var ]* ")"
 typed_var = var ":" type
 
-define_stmt = [ "let" typed_var | "_" ] "=" expr ";"
+define_stmt = [ [ "let" | "mut" ] typed_var | "_" ] "=" expr ";"
 assign_stmt = ident assign_op expr ";"
 
 return_stmt = "return" expr? ";"
