@@ -322,9 +322,9 @@ pub const Lexer = struct {
                     token.kind = TokenKind.INVALID;
                     self.print_error(
                         &token.source,
-                        buffer.items.len,
-                        "Unterminated string literal '{s}' (at {any})",
-                        .{ buffer.items, token.source },
+                        buffer.items.len + 1,
+                        "Syntax Error: Unterminated string literal",
+                        .{},
                         "add terminating '\"'",
                         .{},
                     ) catch {};
@@ -431,7 +431,7 @@ pub const Lexer = struct {
                 self.print_error(
                     &token.source,
                     1,
-                    "Syntax Error: Invalid token \"{s}\"",
+                    "Syntax Error: Invalid token '{s}'",
                     .{buffer.items},
                     "please remove, '{s}' may only be used inside a string literal",
                     .{buffer.items},
