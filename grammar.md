@@ -27,12 +27,13 @@ literal = "null" | number | float_number | """ ascii_char """
 basic_type = void
            | i8 | i16 | i32 | i64
            | u8 | u16 | u32 | u64
-type = void 
+type = basic_type
      | "*" type 
      | "*" "own" type 
      | "[" [ number | "_" ]? "]" type
      | "mut" type
-     | "(" type
+     | "(" type [ "," type ]* ")"
+     | ident
 
 bin_bool_op = "==" | "!=" | "<" | ">" | "<=" | ">="
 bin_arith_op = "+" | "-" | "/" | "*" | "<<" | ">>" | "&" | "|" | "^" | "++" | "**"
@@ -72,9 +73,17 @@ for_stmt = "for" literal "in" expr "{" stmt* "}"
 while_stmt = "while" expr "{" stmt* "}"
 stmt = assign_stmt | return_stmt | loop_op_stmt | if_stmt | for_stmt | while_stmt
 
-func_def = "fn" ident "(" [ typed-var "," ]* ")" "->" type "{" stmt* "}"
+func_head = "fn" ident "(" [ typed-var "," ]* ")" "->" type
+func_def = func_head "{" stmt* "}"
 
 struct_def = "struct" ident "{" [ typed_var "," ]* func_def* "}"
+
+enum_def = "enum" ident "{" [ ident "," ]* func_def* "}"
+
+union_def = "union" ident [ "(" [ "enum" | type ] ")" ]? "{" [ typed_var "," ]* func_def* "}"
+
+trait_def = "trait" ident "{" [ func_head "," | func_def ]* "}"
+
 ```
 
 ### Implemented Grammar

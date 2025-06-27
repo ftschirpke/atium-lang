@@ -124,6 +124,9 @@ pub const TokenKind = enum {
     STRING_LITERAL,
 
     STRUCT,
+    ENUM,
+    UNION,
+    TRAIT,
     FN,
     OWN,
     FOR,
@@ -402,6 +405,8 @@ pub const Lexer = struct {
                     'e' => {
                         if (std.mem.eql(u8, buffer.items[1..], "lse")) {
                             token.kind = TokenKind.ELSE;
+                        } else if (std.mem.eql(u8, buffer.items[1..], "num")) {
+                            token.kind = TokenKind.ENUM;
                         }
                     },
                     'f' => {
@@ -443,6 +448,16 @@ pub const Lexer = struct {
                     's' => {
                         if (std.mem.eql(u8, buffer.items[1..], "truct")) {
                             token.kind = TokenKind.STRUCT;
+                        }
+                    },
+                    't' => {
+                        if (std.mem.eql(u8, buffer.items[1..], "rait")) {
+                            token.kind = TokenKind.TRAIT;
+                        }
+                    },
+                    'u' => {
+                        if (std.mem.eql(u8, buffer.items[1..], "nion")) {
+                            token.kind = TokenKind.UNION;
                         }
                     },
                     'w' => {
