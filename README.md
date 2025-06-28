@@ -27,4 +27,4 @@ SPDX-License-Identifier: MIT
 This project includes third-party code that is unmodified and licensed under the respective license:
 
 - the LLVM project (see `third-party/llvm-project`) is licensed under the Apache License v2.0 with LLVM
-  exceptions (see [LICENSE.txt](./third-party/llvm-project/LICENSE.txt))
+  exceptions (see `third-party/llvm-project/LICENSE.txt`)
