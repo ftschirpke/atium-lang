@@ -4,7 +4,9 @@ const lex = @import("lex.zig");
 const collections = @import("collections.zig");
 
 const AstItem = union(enum) {
+    boolean_literal: bool,
     integer_literal: u64,
+    string_literal: []const u8,
 };
 
 const List = collections.TaggedUnionList(AstItem);
@@ -16,6 +18,7 @@ const Parser = struct {
     next_token: ?lex.Token,
 
     const Self = @This();
+    const Error = error{InvalidToken};
 
     pub fn init(allocator: std.mem.Allocator, lexer: *lex.Lexer) Self {
         const top_level = std.ArrayList(List.Index).init(allocator);
@@ -46,17 +49,22 @@ const Parser = struct {
         var expr: AstItem = undefined;
 
         const token = self.next_token.?;
-
         switch (token.kind) {
+            lex.TokenKind.TRUE => {
+                expr = AstItem{ .boolean_literal = true };
+            },
+            lex.TokenKind.FALSE => {
+                expr = AstItem{ .boolean_literal = false };
+            },
             lex.TokenKind.NUMBER => {
                 const i: u64 = std.fmt.parseInt(token.str) catch |err| {
                     switch (err) {
                         std.fmt.ParseIntError.Overflow => {
-                            try self.lexer.print_error(
+                            self.lexer.print_error(
                                 &token.source,
                                 token.str.?.len,
                                 "Integer {} does not fit into 64 bits",
-                                token.str.?,
+                                .{token.str.?},
                                 "",
                             );
                         },
@@ -64,7 +72,16 @@ const Parser = struct {
                 };
                 expr = AstItem{ .integer_literal = i };
             },
+            lex.TokenKind.STRING_LITERAL => {
+                expr = AstItem{ .string_literal = token.str.? };
+            },
+            else => {
+                self.lexer.print_error(&token.source, 1, "Expected expression; unexpected token", .{}, "");
+                return Error.InvalidToken;
+            },
         }
+
+        return self.list.append(expr);
     }
 
     pub fn parse(self: *Self) !void {
