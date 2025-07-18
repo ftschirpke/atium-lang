@@ -3,6 +3,7 @@ const std = @import("std");
 const testing = std.testing;
 
 pub const lex = @import("lex.zig");
+pub const collections = @import("collections.zig");
 
 pub export fn sub(a: i32, b: i32) i32 {
     return a - b;
