@@ -1,4 +1,6 @@
+#!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
+
 import sys
 
 from pathlib import Path
@@ -27,6 +29,8 @@ def check(root: Path) -> bool:
 
         with open(path, "r") as f:
             first_line = f.readline()
+            if first_line.startswith("#!"):  # skip shebang
+                first_line = f.readline()
 
         if SPDX_IDENT not in first_line:
             if problems_found == 0:
