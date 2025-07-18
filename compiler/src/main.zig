@@ -6,6 +6,11 @@ const std = @import("std");
 const lib = @import("compiler_lib");
 const TokenKind = lib.lex.TokenKind;
 
+const Command = enum {
+    LEX,
+    PARSE,
+};
+
 pub fn main() !void {
     var general_purpose_allocator: std.heap.GeneralPurposeAllocator(.{}) = .init;
     const gpa = general_purpose_allocator.allocator();
@@ -21,13 +26,30 @@ pub fn main() !void {
     try stdout.print("Result of {} + {} = {}.\n", .{ 4, 2, mlir.add(4, 2) });
     try bw.flush();
 
+    var command: Command = undefined;
+    const command_str = args.next();
+    if (command_str) |cmd| {
+        if (std.mem.eql(u8, cmd, "lex")) {
+            command = Command.LEX;
+        } else if (std.mem.eql(u8, cmd, "parse")) {
+            command = Command.PARSE;
+        } else {
+            std.log.err("Unsupported command provided: {s}; Expected lex/ast", .{cmd});
+        }
+    } else {
+        std.log.err("No command provided (lex/ast)", .{});
+    }
+
     const filepath = args.next();
     if (filepath) |path| {
         std.fs.cwd().access(path, .{}) catch |err| {
             std.log.err("Error occured when accessing the specified file '{s}': {}", .{ path, err });
         };
         const absolute_path = try std.fs.cwd().realpathAlloc(gpa, path[0..path.len]);
-        try lex(gpa, stdout, absolute_path);
+        switch (command) {
+            Command.LEX => try lex(gpa, stdout, absolute_path),
+            Command.PARSE => try parse(gpa, stdout, absolute_path),
+        }
     }
 
     try bw.flush();
@@ -58,4 +80,11 @@ fn lex(allocator: std.mem.Allocator, writer: anytype, filepath: []const u8) !voi
         opt_token = try lexer.next_token();
     }
     try writer.print("\n", .{});
+}
+
+fn parse(allocator: std.mem.Allocator, writer: anytype, filepath: []const u8) !void {
+    var lexer = try lib.lex.Lexer.init(allocator, filepath);
+    defer lexer.deinit();
+
+    try writer.print("Parsing...", .{}); // TODO: implement
 }
