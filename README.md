@@ -22,6 +22,9 @@ The source code in this repository is licensed under the MIT License (see [LICEN
 SPDX-License-Identifier: MIT
 ```
 
+Exceptions, i.e. code derived from other people's work, are explicitly marked as such with an SPDX-License-Identifier
+and the source at the top of the source file or mentioned in the [[#Third-Party Code]] section below.
+
 #### Third-Party Code
 
 This project includes third-party code that is unmodified and licensed under the respective license:

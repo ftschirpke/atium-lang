@@ -3,7 +3,7 @@ import sys
 
 from pathlib import Path
 
-SPDX_IDENT = "SPDX-License-Identifier: MIT"
+SPDX_IDENT = "SPDX-License-Identifier: "
 
 
 def check(root: Path) -> bool:

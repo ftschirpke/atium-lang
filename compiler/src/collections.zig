@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MPL-2.0
+
+// the following implementation of a dense data structure for dense unions is inspired by
+// a blog post by Adrian Alic (https://alic.dev/blog/dense-enums)
+// and his prototype implementation at https://github.com/dist1ll/osmium/blob/main/src/osmium.zig
+// and is subject to the terms of the Mozilla Public License v2.0
+
 const std = @import("std");
 
 const MAX_SIZES = 64;
