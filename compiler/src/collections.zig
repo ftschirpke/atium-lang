@@ -73,7 +73,7 @@ pub fn TaggedUnionList(comptime T: type) type {
 
         const Self = @This();
 
-        const Index = struct {
+        pub const Index = struct {
             tag: Tag,
             index: usize,
         };
