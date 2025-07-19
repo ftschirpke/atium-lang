@@ -122,6 +122,8 @@ pub const TokenKind = enum {
     NUMBER,
     IDENTIFIER,
     STRING_LITERAL,
+    TRUE,
+    FALSE,
 
     STRUCT,
     ENUM,
@@ -185,7 +187,7 @@ pub const Lexer = struct {
                 .{codepoint},
                 "please remove, unicode character '{s}' may only be used inside a string literal",
                 .{codepoint},
-            ) catch {};
+            );
             codepoint = self.scanner.peek() orelse return;
         }
     }
@@ -361,7 +363,7 @@ pub const Lexer = struct {
                         .{},
                         "add terminating '\"'",
                         .{},
-                    ) catch {};
+                    );
                 }
             },
             '0'...'9' => {
@@ -414,6 +416,8 @@ pub const Lexer = struct {
                             token.kind = TokenKind.FN;
                         } else if (std.mem.eql(u8, buffer.items[1..], "or")) {
                             token.kind = TokenKind.FOR;
+                        } else if (std.mem.eql(u8, buffer.items[1..], "alse")) {
+                            token.kind = TokenKind.FALSE;
                         }
                     },
                     'i' => {
@@ -453,6 +457,8 @@ pub const Lexer = struct {
                     't' => {
                         if (std.mem.eql(u8, buffer.items[1..], "rait")) {
                             token.kind = TokenKind.TRAIT;
+                        } else if (std.mem.eql(u8, buffer.items[1..], "rue")) {
+                            token.kind = TokenKind.TRUE;
                         }
                     },
                     'u' => {
@@ -481,7 +487,7 @@ pub const Lexer = struct {
                     .{buffer.items},
                     "please remove, '{s}' may only be used inside a string literal",
                     .{buffer.items},
-                ) catch {};
+                );
                 token.kind = TokenKind.INVALID;
                 token.str = try self.allocator.dupe(u8, buffer.items);
             },
@@ -496,12 +502,45 @@ pub const Lexer = struct {
         highlight_len: usize,
         comptime err_fmt: []const u8,
         err_args: anytype,
-        comptime hint_fmt: []const u8,
+        comptime hint_fmt: ?[]const u8,
+        hint_args: anytype,
+    ) void {
+        const stderr_file = std.io.getStdErr().writer();
+        var bw = std.io.bufferedWriter(stderr_file);
+        const stderr = bw.writer();
+
+        const attempts = 5;
+
+        for (0..attempts) |_| {
+            self._print_error(stderr, source, highlight_len, err_fmt, err_args, hint_fmt, hint_args) catch |err| {
+                stderr.print("\nFailed to print error message:\n{}\nRetrying...\n", .{err}) catch {};
+                continue;
+            };
+            break;
+        }
+
+        for (0..attempts) |_| {
+            bw.flush() catch {
+                continue;
+            };
+            break;
+        }
+    }
+
+    fn _print_error(
+        self: *Self,
+        writer: anytype,
+        source: *const SourceInfo,
+        highlight_len: usize,
+        comptime err_fmt: []const u8,
+        err_args: anytype,
+        comptime hint_fmt: ?[]const u8,
         hint_args: anytype,
     ) !void {
         std.debug.assert(source.line > 0);
 
         if (source.line != self.scanner.line_num) {
+            std.debug.assert(false); // TODO: allow for errors outside of current line
             return;
         }
 
@@ -512,55 +551,51 @@ pub const Lexer = struct {
             digit_count += 1;
         }
 
-        const stderr_file = std.io.getStdErr().writer();
-        var bw = std.io.bufferedWriter(stderr_file);
-        const stderr = bw.writer();
+        for (0..digit_count + 2) |_| {
+            try writer.writeByte('-');
+        }
+        try writer.print("# {s}:{}:{} - ", .{ source.path, source.line, source.col });
+        try writer.print(err_fmt, err_args);
+        try writer.writeByte('\n');
 
         for (0..digit_count + 2) |_| {
-            try stderr.writeByte('-');
+            try writer.writeByte(' ');
         }
-        try stderr.print("# {s}:{}:{} - ", .{ source.path, source.line, source.col });
-        try stderr.print(err_fmt, err_args);
-        try stderr.writeByte('\n');
+        try writer.writeByte('|');
+        try writer.writeByte('\n');
+
+        try writer.print(" {} | {s}", .{ source.line, self.scanner.line_buf.items });
 
         for (0..digit_count + 2) |_| {
-            try stderr.writeByte(' ');
+            try writer.writeByte(' ');
         }
-        try stderr.writeByte('|');
-        try stderr.writeByte('\n');
-
-        try stderr.print(" {} | {s}", .{ source.line, self.scanner.line_buf.items });
-
-        for (0..digit_count + 2) |_| {
-            try stderr.writeByte(' ');
-        }
-        try stderr.writeByte('|');
+        try writer.writeByte('|');
 
         std.debug.assert(source.col > 0);
 
         for (0..source.col) |_| {
-            try stderr.writeByte(' ');
+            try writer.writeByte(' ');
         }
         for (0..highlight_len) |_| {
-            try stderr.writeByte('^');
+            try writer.writeByte('^');
         }
-        try stderr.writeByte('\n');
+        try writer.writeByte('\n');
+
+        if (hint_fmt) |hint_format| {
+            for (0..digit_count + 2) |_| {
+                try writer.writeByte(' ');
+            }
+            try writer.writeByte('|');
+            try writer.writeByte(' ');
+            _ = try writer.write("hint: ");
+            try writer.print(hint_format, hint_args);
+            try writer.writeByte('\n');
+        }
 
         for (0..digit_count + 2) |_| {
-            try stderr.writeByte(' ');
+            try writer.writeByte(' ');
         }
-        try stderr.writeByte('|');
-        try stderr.writeByte(' ');
-        _ = try stderr.write("hint: ");
-        try stderr.print(hint_fmt, hint_args);
-        try stderr.writeByte('\n');
-
-        for (0..digit_count + 2) |_| {
-            try stderr.writeByte(' ');
-        }
-        try stderr.writeByte('|');
-        try stderr.writeByte('\n');
-
-        try bw.flush();
+        try writer.writeByte('|');
+        try writer.writeByte('\n');
     }
 };
