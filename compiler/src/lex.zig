@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 const std = @import("std");
 
+const errmsg = @import("error_messages.zig");
+
 const SourceFile = @import("sources.zig").SourceFile;
 
 const READER_BUFFER_SIZE = 4096;
@@ -10,12 +12,12 @@ const Scanner = struct {
     source: *const SourceFile,
     line_buf: []const u8,
     line_num: u32,
-    col: usize,
+    col: u32,
     unicode_view: std.unicode.Utf8View,
     unicode_iterator: std.unicode.Utf8Iterator,
 
     const Self = @This();
-    const Error = error{InvalidSourceFile};
+    const Error = error{ InvalidSourceFile, EndOfFile };
 
     fn init(source: *const SourceFile) !Self {
         const line_buf = source.get_line(1) orelse return Error.InvalidSourceFile;
@@ -34,7 +36,7 @@ const Scanner = struct {
 
     fn advance_line(self: *Self) !void {
         if (self.line_num >= self.source.get_line_count()) {
-            return;
+            return Error.EndOfFile;
         }
         self.line_num += 1;
         self.line_buf = self.source.get_line(self.line_num).?;
@@ -164,8 +166,11 @@ pub const Lexer = struct {
         var codepoint = self.scanner.peek() orelse return;
         while (codepoint.len > 1) {
             _ = self.scanner.consume();
-            self.print_error(
-                &.{ .path = self.path, .line = self.scanner.line_num, .col = self.scanner.col },
+            errmsg.print_error(
+                .Error,
+                self.scanner.source,
+                self.scanner.line_num,
+                self.scanner.col,
                 1,
                 "Invalid Character Error: Unicode character '{s}'",
                 .{codepoint},
@@ -186,6 +191,9 @@ pub const Lexer = struct {
     fn peek_ascii(self: *Self) ?u8 {
         self.consume_until_ascii();
         const codepoint = self.scanner.peek() orelse return null;
+        if (codepoint.len != 1) {
+            std.debug.print("Codepoint: '{s}'", .{codepoint});
+        }
         std.debug.assert(codepoint.len == 1);
         return codepoint[0];
     }
@@ -199,7 +207,7 @@ pub const Lexer = struct {
         var token = Token{
             .kind = TokenKind.INVALID,
             .source = .{
-                .path = self.path,
+                .file = self.scanner.source,
                 .line = self.scanner.line_num,
                 .col = self.scanner.col,
             },
@@ -340,8 +348,11 @@ pub const Lexer = struct {
                     token.str = try self.allocator.dupe(u8, buffer.items);
                 } else {
                     token.kind = TokenKind.INVALID;
-                    self.print_error(
-                        &token.source,
+                    errmsg.print_error(
+                        .Error,
+                        token.source.file,
+                        token.source.line,
+                        token.source.col,
                         buffer.items.len + 1,
                         "Syntax Error: Unterminated string literal",
                         .{},
@@ -464,8 +475,11 @@ pub const Lexer = struct {
                 }
             },
             else => {
-                self.print_error(
-                    &token.source,
+                errmsg.print_error(
+                    .Error,
+                    token.source.file,
+                    token.source.line,
+                    token.source.col,
                     1,
                     "Syntax Error: Invalid token '{s}'",
                     .{buffer.items},
@@ -478,108 +492,5 @@ pub const Lexer = struct {
         }
 
         return token;
-    }
-
-    pub fn print_error(
-        self: *Self,
-        source: *const TokenSource,
-        highlight_len: usize,
-        comptime err_fmt: []const u8,
-        err_args: anytype,
-        comptime hint_fmt: ?[]const u8,
-        hint_args: anytype,
-    ) void {
-        const stderr_file = std.io.getStdErr().writer();
-        var bw = std.io.bufferedWriter(stderr_file);
-        const stderr = bw.writer();
-
-        const attempts = 5;
-
-        for (0..attempts) |_| {
-            self._print_error(stderr, source, highlight_len, err_fmt, err_args, hint_fmt, hint_args) catch |err| {
-                stderr.print("\nFailed to print error message:\n{}\nRetrying...\n", .{err}) catch {};
-                continue;
-            };
-            break;
-        }
-
-        for (0..attempts) |_| {
-            bw.flush() catch {
-                continue;
-            };
-            break;
-        }
-    }
-
-    fn _print_error(
-        self: *Self,
-        writer: anytype,
-        source: *const TokenSource,
-        highlight_len: usize,
-        comptime err_fmt: []const u8,
-        err_args: anytype,
-        comptime hint_fmt: ?[]const u8,
-        hint_args: anytype,
-    ) !void {
-        std.debug.assert(source.line > 0);
-
-        if (source.line != self.scanner.line_num) {
-            std.debug.assert(false); // TODO: allow for errors outside of current line
-            return;
-        }
-
-        var digit_count: u32 = 0;
-        var line_remainder = source.line;
-        while (line_remainder != 0) {
-            line_remainder /= 10;
-            digit_count += 1;
-        }
-
-        for (0..digit_count + 2) |_| {
-            try writer.writeByte('-');
-        }
-        try writer.print("# {s}:{}:{} - ", .{ source.path, source.line, source.col });
-        try writer.print(err_fmt, err_args);
-        try writer.writeByte('\n');
-
-        for (0..digit_count + 2) |_| {
-            try writer.writeByte(' ');
-        }
-        try writer.writeByte('|');
-        try writer.writeByte('\n');
-
-        try writer.print(" {} | {s}", .{ source.line, self.scanner.line_buf.items });
-
-        for (0..digit_count + 2) |_| {
-            try writer.writeByte(' ');
-        }
-        try writer.writeByte('|');
-
-        std.debug.assert(source.col > 0);
-
-        for (0..source.col) |_| {
-            try writer.writeByte(' ');
-        }
-        for (0..highlight_len) |_| {
-            try writer.writeByte('^');
-        }
-        try writer.writeByte('\n');
-
-        if (hint_fmt) |hint_format| {
-            for (0..digit_count + 2) |_| {
-                try writer.writeByte(' ');
-            }
-            try writer.writeByte('|');
-            try writer.writeByte(' ');
-            _ = try writer.write("hint: ");
-            try writer.print(hint_format, hint_args);
-            try writer.writeByte('\n');
-        }
-
-        for (0..digit_count + 2) |_| {
-            try writer.writeByte(' ');
-        }
-        try writer.writeByte('|');
-        try writer.writeByte('\n');
     }
 };

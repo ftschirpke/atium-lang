@@ -7,7 +7,7 @@ const EIGHT_MEGABYTES = 1 << 23;
 pub const SourceFile = struct {
     name: std.ArrayList(u8),
     content: std.ArrayList(u8),
-    line_starts: std.ArrayList(u32),
+    line_starts: std.ArrayList(usize),
 
     const Self = @This();
 
@@ -15,12 +15,12 @@ pub const SourceFile = struct {
         allocator: std.mem.Allocator,
         name: std.ArrayList(u8),
         content: std.ArrayList(u8),
-    ) Self {
+    ) !Self {
         var line_starts = std.ArrayList(usize).init(allocator);
         var line_start_incoming = true;
         for (0.., content.items) |i, c| {
             if (line_start_incoming) {
-                line_starts.append(i);
+                try line_starts.append(i);
                 line_start_incoming = false;
             }
             if (c == '\n') {
@@ -64,8 +64,12 @@ pub const SourceFile = struct {
             return null;
         }
         const line_index = line_num - 1;
-        const start = self.line_starts[line_index];
-        const end = if (line_num == self.get_line_count()) self.content.items.len else self.line_starts[line_index + 1];
-        return self.content[start..end];
+        const start = self.line_starts.items[line_index];
+        if (line_num == self.get_line_count()) {
+            return self.content.items[start..];
+        } else {
+            const end = self.line_starts.items[line_index + 1];
+            return self.content.items[start..end];
+        }
     }
 };
