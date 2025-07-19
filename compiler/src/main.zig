@@ -86,5 +86,10 @@ fn parse(allocator: std.mem.Allocator, writer: anytype, filepath: []const u8) !v
     var lexer = try lib.lex.Lexer.init(allocator, filepath);
     defer lexer.deinit();
 
-    try writer.print("Parsing...", .{}); // TODO: implement
+    var parser = lib.parse.Parser.init(allocator, &lexer);
+    defer parser.deinit();
+
+    parser.parse() catch |err| {
+        try writer.print("Error occured while parsing: {}\n", .{err});
+    };
 }
