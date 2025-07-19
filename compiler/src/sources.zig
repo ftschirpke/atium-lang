@@ -2,10 +2,12 @@
 
 const std = @import("std");
 
+const EIGHT_MEGABYTES = 1 << 23;
+
 pub const SourceFile = struct {
     name: std.ArrayList(u8),
     content: std.ArrayList(u8),
-    line_starts: std.ArrayList(usize),
+    line_starts: std.ArrayList(u32),
 
     const Self = @This();
 
@@ -36,6 +38,20 @@ pub const SourceFile = struct {
         self.name.deinit();
         self.content.deinit();
         self.line_starts.deinit();
+    }
+
+    pub fn parse_from_file(allocator: std.mem.Allocator, path: []const u8) !Self {
+        const file = try std.fs.openFileAbsolute(path, .{});
+        var buffered_reader = std.io.bufferedReader(file.reader());
+        const reader = buffered_reader.reader();
+
+        var content_buffer = std.ArrayList(u8).init(allocator);
+        try reader.readAllArrayList(&content_buffer, EIGHT_MEGABYTES);
+
+        var file_name = std.ArrayList(u8).init(allocator);
+        try file_name.appendSlice(path);
+
+        return init(allocator, file_name, content_buffer);
     }
 
     pub fn get_line_count(self: *const Self) usize {

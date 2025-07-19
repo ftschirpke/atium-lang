@@ -1,35 +1,29 @@
 // SPDX-License-Identifier: MIT
 const std = @import("std");
 
+const SourceFile = @import("sources.zig").SourceFile;
+
 const READER_BUFFER_SIZE = 4096;
 const BufferedReader = std.io.BufferedReader(READER_BUFFER_SIZE, std.fs.File.Reader);
 
 const Scanner = struct {
-    path: []const u8,
-    file: std.fs.File,
-    _buffered_reader: BufferedReader,
-    reader: BufferedReader.Reader,
-    line_buf: std.ArrayList(u8),
-    line_num: u64,
+    source: *const SourceFile,
+    line_buf: []const u8,
+    line_num: u32,
     col: usize,
     unicode_view: std.unicode.Utf8View,
     unicode_iterator: std.unicode.Utf8Iterator,
 
     const Self = @This();
+    const Error = error{InvalidSourceFile};
 
-    fn init(allocator: std.mem.Allocator, path: []const u8) !Self {
-        const file = try std.fs.openFileAbsolute(path, .{});
-        var buffered_reader = std.io.bufferedReaderSize(READER_BUFFER_SIZE, file.reader());
-        const reader = buffered_reader.reader();
-        const line_buf = std.ArrayList(u8).init(allocator);
-        const view = try std.unicode.Utf8View.init(line_buf.items);
+    fn init(source: *const SourceFile) !Self {
+        const line_buf = source.get_line(1) orelse return Error.InvalidSourceFile;
+        const view = try std.unicode.Utf8View.init(line_buf);
         var new_scanner = Self{
-            .path = path,
-            .file = file,
-            ._buffered_reader = buffered_reader,
-            .reader = reader,
+            .source = source,
             .line_buf = line_buf,
-            .line_num = 0,
+            .line_num = 1,
             .col = 0,
             .unicode_view = view,
             .unicode_iterator = view.iterator(),
@@ -38,18 +32,14 @@ const Scanner = struct {
         return new_scanner;
     }
 
-    fn deinit(self: Self) void {
-        self.file.close();
-        self.line_buf.deinit();
-    }
-
     fn advance_line(self: *Self) !void {
-        self.line_buf.clearRetainingCapacity();
-        try self.reader.streamUntilDelimiter(self.line_buf.writer(), '\n', null);
-        try self.line_buf.append('\n');
+        if (self.line_num >= self.source.get_line_count()) {
+            return;
+        }
         self.line_num += 1;
+        self.line_buf = self.source.get_line(self.line_num).?;
         self.col = 0;
-        self.unicode_view = try std.unicode.Utf8View.init(self.line_buf.items);
+        self.unicode_view = try std.unicode.Utf8View.init(self.line_buf);
         self.unicode_iterator = self.unicode_view.iterator();
     }
 
@@ -145,38 +135,32 @@ pub const TokenKind = enum {
     MUT,
 };
 
-const SourceInfo = struct {
-    path: []const u8,
-    line: u64,
-    col: u64,
+const TokenSource = struct {
+    file: *const SourceFile,
+    line: u32,
+    col: u32,
 };
 
 pub const Token = struct {
     kind: TokenKind,
-    source: SourceInfo,
+    source: TokenSource,
     str: ?[]const u8,
 };
 
 pub const Lexer = struct {
     scanner: Scanner,
-    path: []const u8,
     allocator: std.mem.Allocator,
 
     const Self = @This();
 
-    pub fn init(allocator: std.mem.Allocator, path: []const u8) !Self {
+    pub fn init(allocator: std.mem.Allocator, source_file: *const SourceFile) !Self {
         return Self{
-            .scanner = try Scanner.init(allocator, path),
-            .path = path,
+            .scanner = try Scanner.init(source_file),
             .allocator = allocator,
         };
     }
 
-    pub fn deinit(self: Self) void {
-        self.scanner.deinit();
-    }
-
-    fn move_to_ascii(self: *Self) void {
+    fn consume_until_ascii(self: *Self) void {
         var codepoint = self.scanner.peek() orelse return;
         while (codepoint.len > 1) {
             _ = self.scanner.consume();
@@ -193,14 +177,14 @@ pub const Lexer = struct {
     }
 
     fn consume_ascii(self: *Self) ?u8 {
-        self.move_to_ascii();
+        self.consume_until_ascii();
         const codepoint = self.scanner.consume() orelse return null;
         std.debug.assert(codepoint.len == 1);
         return codepoint[0];
     }
 
     fn peek_ascii(self: *Self) ?u8 {
-        self.move_to_ascii();
+        self.consume_until_ascii();
         const codepoint = self.scanner.peek() orelse return null;
         std.debug.assert(codepoint.len == 1);
         return codepoint[0];
@@ -498,7 +482,7 @@ pub const Lexer = struct {
 
     pub fn print_error(
         self: *Self,
-        source: *const SourceInfo,
+        source: *const TokenSource,
         highlight_len: usize,
         comptime err_fmt: []const u8,
         err_args: anytype,
@@ -530,7 +514,7 @@ pub const Lexer = struct {
     fn _print_error(
         self: *Self,
         writer: anytype,
-        source: *const SourceInfo,
+        source: *const TokenSource,
         highlight_len: usize,
         comptime err_fmt: []const u8,
         err_args: anytype,
