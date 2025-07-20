@@ -85,7 +85,7 @@ pub fn TaggedUnionList(comptime T: type) type {
 
         fn index_primitive_to_internal(primitive: Index) InternalIndex {
             return InternalIndex{
-                .index = primitive & ((1 << 64) - 1),
+                .index = @truncate(primitive),
                 .tag = @enumFromInt(primitive >> 64),
             };
         }
@@ -108,12 +108,11 @@ pub fn TaggedUnionList(comptime T: type) type {
             const item_tag = std.meta.activeTag(item);
             switch (item_tag) {
                 inline else => |tag| {
-                    const outer_idx: usize = comptime @intFromEnum(tag);
+                    const tag_num: usize = comptime @intFromEnum(tag);
+                    const outer_idx = comptime metadata.size_index_for_field[tag_num];
+                    const size = comptime metadata.unique_sizes[outer_idx];
 
-                    const size_idx = comptime metadata.size_index_for_field[outer_idx];
-                    const size = comptime metadata.unique_sizes[size_idx];
-                    const raw_item: [size]u8 = std.mem.toBytes(@field(item, tag_names[outer_idx]));
-
+                    const raw_item: [size]u8 = std.mem.toBytes(@field(item, tag_names[tag_num]));
                     const insert_index = self.data[outer_idx].items.len / size;
                     try self.data[outer_idx].appendSlice(&raw_item);
 
@@ -127,16 +126,16 @@ pub fn TaggedUnionList(comptime T: type) type {
             const index = index_primitive_to_internal(primitive_index);
             switch (index.tag) {
                 inline else => |tag| {
-                    const outer_idx: usize = comptime @intFromEnum(tag);
-                    const size_idx = comptime metadata.size_index_for_field[outer_idx];
-                    const size = comptime metadata.unique_sizes[size_idx];
+                    const tag_num: usize = comptime @intFromEnum(tag);
+                    const outer_idx = comptime metadata.size_index_for_field[tag_num];
+                    const size = comptime metadata.unique_sizes[outer_idx];
 
                     const raw_item_data = self.data[outer_idx].items[size * index.index .. size * (index.index + 1)];
                     var raw_item = [_]u8{0} ** size;
                     @memcpy(&raw_item, raw_item_data);
 
                     const item = std.mem.bytesAsValue(std.meta.TagPayload(T, tag), &raw_item);
-                    return @unionInit(T, tag_names[outer_idx], item.*);
+                    return @unionInit(T, tag_names[tag_num], item.*);
                 },
             }
         }
@@ -144,7 +143,7 @@ pub fn TaggedUnionList(comptime T: type) type {
         pub fn memory_footprint(self: *Self) struct { this: usize, naive: usize } {
             var this_footprint: usize = 0;
             var item_count: usize = 0;
-            for (self.data, metadata.size_index_for_field) |arr, size_idx| {
+            for (self.data, 0..metadata.unique_sizes_count) |arr, size_idx| {
                 const size = metadata.unique_sizes[size_idx];
                 this_footprint += arr.items.len;
                 item_count += arr.items.len / size;
@@ -163,6 +162,7 @@ test "add and retrieve elements" {
     const Union = union(enum) {
         small: u16,
         big: inner,
+        other_big: u128,
     };
     const Tag = std.meta.Tag(Union);
     const List = TaggedUnionList(Union);
@@ -175,7 +175,7 @@ test "add and retrieve elements" {
 
     const test_elem1 = Union{ .small = 42 };
     const test_elem2 = Union{ .big = .{ .a = 4, .b = 3 } };
-    const test_elem3 = Union{ .big = .{ .a = 123, .b = 456 } };
+    const test_elem3 = Union{ .other_big = 123456 };
     const test_elem4 = Union{ .small = 987 };
 
     const idx1 = try list.append(test_elem1);
@@ -207,8 +207,8 @@ test "add and retrieve elements" {
     try std.testing.expectEqual(get2.big, inner{ .a = 4, .b = 3 });
 
     const get3 = list.get(idx3);
-    try std.testing.expectEqual(std.meta.activeTag(get3), @field(Tag, "big"));
-    try std.testing.expectEqual(get3.big, inner{ .a = 123, .b = 456 });
+    try std.testing.expectEqual(std.meta.activeTag(get3), @field(Tag, "other_big"));
+    try std.testing.expectEqual(get3.other_big, 123456);
 
     const get4 = list.get(idx4);
     try std.testing.expectEqual(std.meta.activeTag(get4), @field(Tag, "small"));

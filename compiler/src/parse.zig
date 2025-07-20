@@ -9,13 +9,19 @@ const SourceFile = @import("sources.zig").SourceFile;
 const AstItemList = collections.TaggedUnionList(AstItem);
 const AstItemIndex = u128;
 
+const AstIndex = struct {
+    source_index: usize,
+    item_index: AstItemIndex,
+};
+
 const AstItem = union(enum) {
     boolean_literal: bool,
     integer_literal: u64,
     string_literal: []const u8,
+    identifier: []const u8,
     binary_expression: struct {
-        left_expr: AstItemIndex,
-        right_expr: AstItemIndex,
+        left_expr: AstIndex,
+        right_expr: AstIndex,
         operator: enum {
             EQUAL,
             NOT_EQUAL,
@@ -37,7 +43,7 @@ const AstItem = union(enum) {
         },
     },
     unary_expression: struct {
-        inner_expr: AstItemIndex,
+        inner_expr: AstIndex,
         operator: enum {
             NOT,
             MINUS,
@@ -45,8 +51,25 @@ const AstItem = union(enum) {
         },
     },
     array_access: struct {
-        outer_expr: AstItemIndex,
-        bracket_expr: AstItemIndex,
+        outer_expr: AstIndex,
+        bracket_expr: AstIndex,
+    },
+    function_call: struct {
+        function_expr: AstIndex,
+        args_expr: std.ArrayList(Ast.Index),
+    },
+    primitive_access: struct {
+        outer_expr: AstIndex,
+        access_type: enum {
+            DEREFERENCE,
+            ADDRESS,
+            UNWRAP_CHECKED,
+            UNWRAP_UNCHECKED,
+        },
+    },
+    field_access: struct {
+        outer_expr: AstIndex,
+        field_name: []const u8,
     },
 };
 
@@ -74,10 +97,7 @@ const Ast = struct {
     top_level: std.ArrayList(Index),
 
     const Self = @This();
-    const Index = struct {
-        source_index: usize,
-        item_index: AstItemList.Index,
-    };
+    const Index = AstIndex;
 
     pub fn init(allocator: std.mem.Allocator) Self {
         const item_list = AstItemList.init(allocator);
@@ -114,9 +134,10 @@ pub const Parser = struct {
     ast: Ast,
     lexer: *lex.Lexer,
     next_token: ?lex.Token,
+    allocator: std.mem.Allocator,
 
     const Self = @This();
-    const Error = error{ InvalidToken, MissingToken };
+    const Error = error{ InvalidToken, MissingToken, OutOfMemory };
 
     pub fn init(allocator: std.mem.Allocator, lexer: *lex.Lexer) Self {
         comptime std.debug.assert(AstItemIndex == AstItemList.Index);
@@ -125,6 +146,7 @@ pub const Parser = struct {
             .ast = ast,
             .lexer = lexer,
             .next_token = null,
+            .allocator = allocator,
         };
     }
 
@@ -146,11 +168,11 @@ pub const Parser = struct {
         return self.has_next() and self.next_token.?.kind == expected;
     }
 
-    fn parse_expression(self: *Self) !Ast.Index {
+    fn parse_expression(self: *Self) Error!Ast.Index {
         return self.parse_or_expression();
     }
 
-    fn parse_or_expression(self: *Self) !Ast.Index {
+    fn parse_or_expression(self: *Self) Error!Ast.Index {
         const left_expr = try self.parse_and_expression();
         if (!self.check_next(lex.TokenKind.OR)) {
             return left_expr;
@@ -167,7 +189,7 @@ pub const Parser = struct {
         return self.ast.append(expr, AstItemSource.from_token(or_token));
     }
 
-    fn parse_and_expression(self: *Self) !Ast.Index {
+    fn parse_and_expression(self: *Self) Error!Ast.Index {
         const left_expr = try self.parse_not_expression();
         if (!self.check_next(lex.TokenKind.AND)) {
             return left_expr;
@@ -184,7 +206,7 @@ pub const Parser = struct {
         return self.ast.append(expr, AstItemSource.from_token(and_token));
     }
 
-    fn parse_not_expression(self: *Self) !Ast.Index {
+    fn parse_not_expression(self: *Self) Error!Ast.Index {
         if (!self.check_next(lex.TokenKind.EXCLAMATION)) {
             return self.parse_compare_expression();
         }
@@ -199,12 +221,19 @@ pub const Parser = struct {
         return self.ast.append(expr, AstItemSource.from_token(not_token));
     }
 
-    fn parse_compare_expression(self: *Self) !Ast.Index {
+    fn parse_compare_expression(self: *Self) Error!Ast.Index {
         const left_expr = try self.parse_bitwise_or_expression();
         if (!self.has_next()) {
             return left_expr;
         }
-        const operator = op: switch (self.next_token.?.kind) {
+        var expr = AstItem{
+            .binary_expression = .{
+                .left_expr = left_expr,
+                .right_expr = undefined,
+                .operator = undefined,
+            },
+        };
+        expr.binary_expression.operator = op: switch (self.next_token.?.kind) {
             lex.TokenKind.EQUAL => break :op .EQUAL,
             lex.TokenKind.NOT_EQUAL => break :op .NOT_EQUAL,
             lex.TokenKind.GREATER => break :op .GREATER,
@@ -214,18 +243,11 @@ pub const Parser = struct {
             else => return left_expr,
         };
         const compare_token = try self.consume_token();
-        const right_expr = try self.parse_bitwise_or_expression();
-        const expr = AstItem{
-            .binary_expression = .{
-                .left_expr = left_expr,
-                .right_expr = right_expr,
-                .operator = operator,
-            },
-        };
+        expr.binary_expression.right_expr = try self.parse_bitwise_or_expression();
         return self.ast.append(expr, AstItemSource.from_token(compare_token));
     }
 
-    fn parse_bitwise_or_expression(self: *Self) !Ast.Index {
+    fn parse_bitwise_or_expression(self: *Self) Error!Ast.Index {
         const left_expr = try self.parse_bitwise_xor_expression();
         if (!self.check_next(lex.TokenKind.PIPE)) {
             return left_expr;
@@ -242,7 +264,7 @@ pub const Parser = struct {
         return self.ast.append(expr, AstItemSource.from_token(pipe_token));
     }
 
-    fn parse_bitwise_xor_expression(self: *Self) !Ast.Index {
+    fn parse_bitwise_xor_expression(self: *Self) Error!Ast.Index {
         const left_expr = try self.parse_bitwise_and_expression();
         if (!self.check_next(lex.TokenKind.CARET)) {
             return left_expr;
@@ -259,7 +281,7 @@ pub const Parser = struct {
         return self.ast.append(expr, AstItemSource.from_token(caret_token));
     }
 
-    fn parse_bitwise_and_expression(self: *Self) !Ast.Index {
+    fn parse_bitwise_and_expression(self: *Self) Error!Ast.Index {
         const left_expr = try self.parse_bitshift_expression();
         if (!self.check_next(lex.TokenKind.AMPERSAND)) {
             return left_expr;
@@ -276,206 +298,274 @@ pub const Parser = struct {
         return self.ast.append(expr, AstItemSource.from_token(ampersand_token));
     }
 
-    fn parse_bitshift_expression(self: *Self) !Ast.Index {
+    fn parse_bitshift_expression(self: *Self) Error!Ast.Index {
         const left_expr = try self.parse_addition_expression();
         if (!self.has_next()) {
             return left_expr;
         }
-        const operator = op: switch (self.next_token.?.kind) {
+        var expr = AstItem{
+            .binary_expression = .{
+                .left_expr = left_expr,
+                .right_expr = undefined,
+                .operator = undefined,
+            },
+        };
+        expr.binary_expression.operator = op: switch (self.next_token.?.kind) {
             lex.TokenKind.DOUBLE_GREATER => break :op .BITSHIFT_RIGHT,
             lex.TokenKind.DOUBLE_LESS => break :op .BITSHIFT_LEFT,
             else => return left_expr,
         };
         const bitshift_token = try self.consume_token();
-        const right_expr = try self.parse_addition_expression();
-        const expr = AstItem{
-            .binary_expression = .{
-                .left_expr = left_expr,
-                .right_expr = right_expr,
-                .operator = operator,
-            },
-        };
+        expr.binary_expression.right_expr = try self.parse_addition_expression();
         return self.ast.append(expr, AstItemSource.from_token(bitshift_token));
     }
 
-    fn parse_addition_expression(self: *Self) !Ast.Index {
-        const left_expr = try self.parse_compare_expression();
+    fn parse_addition_expression(self: *Self) Error!Ast.Index {
+        const left_expr = try self.parse_multiply_expression();
         if (!self.has_next()) {
             return left_expr;
         }
-        const operator = op: switch (self.next_token.?.kind) {
+        var expr = AstItem{
+            .binary_expression = .{
+                .left_expr = left_expr,
+                .right_expr = undefined,
+                .operator = undefined,
+            },
+        };
+        expr.binary_expression.operator = op: switch (self.next_token.?.kind) {
             lex.TokenKind.PLUS => break :op .ADD,
             lex.TokenKind.MINUS => break :op .SUBTRACT,
             else => return left_expr,
         };
         const op_token = try self.consume_token();
-        const right_expr = try self.parse_compare_expression();
-        const expr = AstItem{
-            .binary_expression = .{
-                .left_expr = left_expr,
-                .right_expr = right_expr,
-                .operator = operator,
-            },
-        };
+        expr.binary_expression.right_expr = try self.parse_multiply_expression();
         return self.ast.append(expr, AstItemSource.from_token(op_token));
     }
 
-    fn parse_multiply_expression(self: *Self) !Ast.Index {
-        const left_expr = try self.parse_addition_expression();
+    fn parse_multiply_expression(self: *Self) Error!Ast.Index {
+        const left_expr = try self.parse_arithmetic_unary_expression();
         if (!self.has_next()) {
             return left_expr;
         }
-        const operator = op: switch (self.next_token.?.kind) {
+        var expr = AstItem{
+            .binary_expression = .{
+                .left_expr = left_expr,
+                .right_expr = undefined,
+                .operator = undefined,
+            },
+        };
+        expr.binary_expression.operator = op: switch (self.next_token.?.kind) {
             lex.TokenKind.ASTERISK => break :op .MULTIPLY,
             lex.TokenKind.SLASH => break :op .DIVIDE,
             else => return left_expr,
         };
         const op_token = try self.consume_token();
-        const right_expr = try self.parse_addition_expression();
-        const expr = AstItem{
-            .binary_expression = .{
-                .left_expr = left_expr,
-                .right_expr = right_expr,
-                .operator = operator,
-            },
-        };
+        expr.binary_expression.right_expr = try self.parse_arithmetic_unary_expression();
         return self.ast.append(expr, AstItemSource.from_token(op_token));
     }
 
-    fn parse_arithmetic_unary_expression(self: *Self) !Ast.Index {
-        const inner_expr = try self.parse_compare_expression();
+    fn parse_arithmetic_unary_expression(self: *Self) Error!Ast.Index {
+        const inner_expr = try self.parse_access_expression();
         if (!self.has_next()) {
             return inner_expr;
         }
-        const operator = op: switch (self.next_token.?.kind) {
-            lex.TokenKind.TILDE => break :op .BIT_NOT,
+        var expr = AstItem{
+            .unary_expression = .{
+                .inner_expr = inner_expr,
+                .operator = undefined,
+            },
+        };
+        expr.unary_expression.operator = op: switch (self.next_token.?.kind) {
+            lex.TokenKind.TILDE => break :op .BIT_INVERSE,
             lex.TokenKind.MINUS => break :op .MINUS,
             else => return inner_expr,
         };
         const op_token = try self.consume_token();
-        const expr = AstItem{
-            .unary_expression = .{
-                .inner_expr = inner_expr,
-                .operator = operator,
-            },
-        };
         return self.ast.append(expr, AstItemSource.from_token(op_token));
     }
 
-    fn parse_access_expression(self: *Self) !Ast.Index {
-        const outer_expr = try self.parse_prioritized_expression();
-        if (!self.has_next()) {
-            return outer_expr;
-        }
-        const token = self.next_token.?;
-        switch (token.kind) {
-            lex.TokenKind.LBRACKET => {
-                _ = try self.consume_token();
-                const bracket_expr = try self.parse_expression();
-                if (self.check_next(lex.TokenKind.RBRACKET)) {
+    fn parse_access_expression(self: *Self) Error!Ast.Index {
+        var outer_expr = try self.parse_prioritized_expression();
+        outer_loop: while (true) {
+            if (!self.has_next()) {
+                return outer_expr;
+            }
+            const token = self.next_token.?;
+            switch (token.kind) {
+                lex.TokenKind.LBRACKET => {
                     _ = try self.consume_token();
-                    const expr = AstItem{
-                        .array_access = .{
-                            .outer_expr = outer_expr,
-                            .bracket_expr = bracket_expr,
-                        },
-                    };
-                    return self.ast.append(expr, AstItemSource.from_token(token)); // TODO: improve source
-                } else if (self.next_token == null) {
-                    print_token_error(
-                        .Error,
-                        &token,
-                        "Found opening bracket without closing bracket.",
-                        .{},
-                        "Ensure your brackets are properly closed.",
-                        .{},
-                    );
-                } else {
-                    print_token_error(
-                        .Info,
-                        &token,
-                        "Opening bracket",
-                        .{},
-                        null,
-                        .{},
-                    );
-                    print_token_error(
-                        .Error,
-                        &self.next_token.?,
-                        "Expected closing bracket but instead found:",
-                        .{},
-                        "Ensure your brackets are properly closed.",
-                        .{},
-                    );
-                }
-                return Error.InvalidToken;
-            },
-            lex.TokenKind.LPAREN => {
-                _ = try self.consume_token();
-                // TODO: parse function arguments
-                if (self.check_next(lex.TokenKind.RPAREN)) {
-                    // TODO: create function call AST item
-                } else if (self.next_token == null) {
-                    print_token_error(
-                        .Error,
-                        &token,
-                        "Found opening parenthesis without closing parenthesis.",
-                        .{},
-                        "Ensure your opening parenthesis is properly closed.",
-                        .{},
-                    );
-                } else {
-                    print_token_error(
-                        .Info,
-                        &token,
-                        "Opening parenthesis",
-                        .{},
-                        null,
-                        .{},
-                    );
-                    print_token_error(
-                        .Error,
-                        &self.next_token.?,
-                        "Expected closing partenthesis but instead found:",
-                        .{},
-                        "Ensure your opening parenthesis is properly closed.",
-                        .{},
-                    );
-                }
-                return Error.InvalidToken;
-            },
-            lex.TokenKind.DOT => {
-                var accessed_expression = outer_expr;
-                var access_token = undefined;
-                while (self.check_next(lex.TokenKind.DOT)) {
-                    access_token = try self.consume_token();
-                    if (self.check_next(lex.TokenKind.IDENTIFIER)) {
-                        // TODO: this is not quite right, we actually need to allow self.arr[..] and self.f().abc ...
+                    const bracket_expr = try self.parse_expression();
+                    if (self.check_next(lex.TokenKind.RBRACKET)) {
+                        _ = try self.consume_token();
+                        const expr = AstItem{
+                            .array_access = .{
+                                .outer_expr = outer_expr,
+                                .bracket_expr = bracket_expr,
+                            },
+                        };
+                        // TODO: improve source
+                        outer_expr = try self.ast.append(expr, AstItemSource.from_token(token));
+                        continue;
                     } else if (self.next_token == null) {
                         print_token_error(
                             .Error,
-                            &access_token,
+                            &token,
+                            "Found opening bracket without closing bracket.",
+                            .{},
+                            "Ensure your brackets are properly closed.",
+                            .{},
+                        );
+                    } else {
+                        print_token_error(
+                            .Info,
+                            &token,
+                            "Opening bracket",
+                            .{},
+                            null,
+                            .{},
+                        );
+                        print_token_error(
+                            .Error,
+                            &self.next_token.?,
+                            "Expected closing bracket but instead found:",
+                            .{},
+                            "Ensure your brackets are properly closed.",
+                            .{},
+                        );
+                    }
+                    return Error.InvalidToken;
+                },
+                lex.TokenKind.LPAREN => {
+                    _ = try self.consume_token();
+                    var args = std.ArrayList(Ast.Index).init(self.allocator);
+                    while (!self.check_next(lex.TokenKind.RPAREN)) {
+                        const expr = try self.parse_expression();
+                        try args.append(expr);
+                        if (self.check_next(lex.TokenKind.COMMA)) {
+                            _ = try self.consume_token();
+                        }
+                    }
+                    if (self.check_next(lex.TokenKind.RPAREN)) {
+                        _ = try self.consume_token();
+                        const expr = AstItem{
+                            .function_call = .{
+                                .function_expr = outer_expr,
+                                .args_expr = args,
+                            },
+                        };
+                        outer_expr = try self.ast.append(expr, AstItemSource.from_token(token));
+                        continue;
+                    } else if (self.next_token == null) {
+                        print_token_error(
+                            .Error,
+                            &token,
+                            "Found opening parenthesis without closing parenthesis.",
+                            .{},
+                            "Ensure your opening parenthesis is properly closed.",
+                            .{},
+                        );
+                    } else {
+                        print_token_error(
+                            .Info,
+                            &token,
+                            "Opening parenthesis",
+                            .{},
+                            null,
+                            .{},
+                        );
+                        print_token_error(
+                            .Error,
+                            &self.next_token.?,
+                            "Expected closing partenthesis but instead found:",
+                            .{},
+                            "Ensure your opening parenthesis is properly closed.",
+                            .{},
+                        );
+                    }
+                    return Error.InvalidToken;
+                },
+                lex.TokenKind.DOT => {
+                    _ = try self.consume_token();
+                    if (!self.has_next()) {
+                        print_token_error(
+                            .Error,
+                            &token,
                             "Found start of field access without field or function name.",
                             .{},
                             null,
                             .{},
                         );
-                    } else {
-                        print_token_error(
-                            .Error,
-                            &self.next_token.?,
-                            "Expected field access but instead found:",
-                            .{},
-                            null,
-                            .{},
-                        );
+                        return Error.InvalidToken;
                     }
-                }
-            },
+                    const access_token = self.next_token.?;
+                    switch (access_token.kind) {
+                        lex.TokenKind.ASTERISK => {
+                            const expr = AstItem{
+                                .primitive_access = .{
+                                    .outer_expr = outer_expr,
+                                    .access_type = .DEREFERENCE,
+                                },
+                            };
+                            outer_expr = try self.ast.append(expr, AstItemSource.from_token(access_token));
+                        },
+                        lex.TokenKind.AMPERSAND => {
+                            const expr = AstItem{
+                                .primitive_access = .{
+                                    .outer_expr = outer_expr,
+                                    .access_type = .ADDRESS,
+                                },
+                            };
+                            outer_expr = try self.ast.append(expr, AstItemSource.from_token(access_token));
+                        },
+                        lex.TokenKind.QUESTION => {
+                            const expr = AstItem{
+                                .primitive_access = .{
+                                    .outer_expr = outer_expr,
+                                    .access_type = .UNWRAP_CHECKED,
+                                },
+                            };
+                            outer_expr = try self.ast.append(expr, AstItemSource.from_token(access_token));
+                        },
+                        lex.TokenKind.EXCLAMATION => {
+                            const expr = AstItem{
+                                .primitive_access = .{
+                                    .outer_expr = outer_expr,
+                                    .access_type = .UNWRAP_UNCHECKED,
+                                },
+                            };
+                            outer_expr = try self.ast.append(expr, AstItemSource.from_token(access_token));
+                        },
+                        lex.TokenKind.IDENTIFIER => {
+                            const expr = AstItem{
+                                .field_access = .{
+                                    .outer_expr = outer_expr,
+                                    .field_name = token.str.?,
+                                },
+                            };
+                            outer_expr = try self.ast.append(expr, AstItemSource.from_token(access_token));
+                        },
+                        else => {
+                            print_token_error(
+                                .Error,
+                                &access_token,
+                                "Expected field access or one of .* .& .? .! but instead found:",
+                                .{},
+                                null,
+                                .{},
+                            );
+                            return Error.InvalidToken;
+                        },
+                    }
+                },
+                else => {
+                    break :outer_loop;
+                },
+            }
         }
+        return outer_expr;
     }
 
-    fn parse_prioritized_expression(self: *Self) !Ast.Index {
+    fn parse_prioritized_expression(self: *Self) Error!Ast.Index {
         std.debug.assert(self.has_next());
 
         var expr: AstItem = undefined;
@@ -516,7 +606,8 @@ pub const Parser = struct {
                 source = AstItemSource.from_token(try self.consume_token());
             },
             lex.TokenKind.IDENTIFIER => {
-                // TODO: implement identifier
+                expr = AstItem{ .identifier = token.str.? };
+                source = AstItemSource.from_token(try self.consume_token());
             },
             lex.TokenKind.LPAREN => {
                 _ = try self.consume_token();
@@ -600,4 +691,26 @@ pub fn print_token_error(
         hint_fmt,
         hint_args,
     );
+}
+
+test "parse and-or-expression" {
+    const allocator = std.testing.allocator;
+
+    var name = std.ArrayList(u8).init(allocator);
+    defer name.deinit();
+    try name.writer().write("parse-and-or");
+
+    var contents = std.ArrayList(u8).init(allocator);
+    defer contents.deinit();
+    try contents.writer().write(
+        \\true and 123 or is_true
+    );
+
+    const file = SourceFile.init(allocator, name, contents);
+    var lexer = lex.Lexer.init(allocator, &file);
+    var parser = Parser.init(allocator, &lexer);
+    defer parser.deinit();
+
+    const expr_idx = try parser.parse_expression();
+    // TODO: check result
 }
