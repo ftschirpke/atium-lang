@@ -34,11 +34,13 @@ pub fn main() !void {
 }
 
 fn lex(allocator: std.mem.Allocator, writer: anytype, filepath: []const u8) !void {
-    var lexer = try lib.lex.Lexer.init(allocator, filepath);
-    defer lexer.deinit();
+    const source_file = try lib.sources.SourceFile.parse_from_file(allocator, filepath);
+    defer source_file.deinit();
+
+    var lexer = try lib.lex.Lexer.init(allocator, &source_file);
 
     var opt_token = try lexer.next_token();
-    var line: u64 = 0;
+    var line: u32 = 0;
     while (opt_token != null) {
         const token = opt_token.?;
         while (line < token.source.line) {

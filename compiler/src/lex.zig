@@ -1,35 +1,31 @@
 // SPDX-License-Identifier: MIT
 const std = @import("std");
 
+const errmsg = @import("error_messages.zig");
+
+const SourceFile = @import("sources.zig").SourceFile;
+
 const READER_BUFFER_SIZE = 4096;
 const BufferedReader = std.io.BufferedReader(READER_BUFFER_SIZE, std.fs.File.Reader);
 
 const Scanner = struct {
-    path: []const u8,
-    file: std.fs.File,
-    _buffered_reader: BufferedReader,
-    reader: BufferedReader.Reader,
-    line_buf: std.ArrayList(u8),
-    line_num: u64,
-    col: usize,
+    source: *const SourceFile,
+    line_buf: []const u8,
+    line_num: u32,
+    col: u32,
     unicode_view: std.unicode.Utf8View,
     unicode_iterator: std.unicode.Utf8Iterator,
 
     const Self = @This();
+    const Error = error{ InvalidSourceFile, EndOfFile };
 
-    fn init(allocator: std.mem.Allocator, path: []const u8) !Self {
-        const file = try std.fs.openFileAbsolute(path, .{});
-        var buffered_reader = std.io.bufferedReaderSize(READER_BUFFER_SIZE, file.reader());
-        const reader = buffered_reader.reader();
-        const line_buf = std.ArrayList(u8).init(allocator);
-        const view = try std.unicode.Utf8View.init(line_buf.items);
+    fn init(source: *const SourceFile) !Self {
+        const line_buf = source.get_line(1) orelse return Error.InvalidSourceFile;
+        const view = try std.unicode.Utf8View.init(line_buf);
         var new_scanner = Self{
-            .path = path,
-            .file = file,
-            ._buffered_reader = buffered_reader,
-            .reader = reader,
+            .source = source,
             .line_buf = line_buf,
-            .line_num = 0,
+            .line_num = 1,
             .col = 0,
             .unicode_view = view,
             .unicode_iterator = view.iterator(),
@@ -38,18 +34,14 @@ const Scanner = struct {
         return new_scanner;
     }
 
-    fn deinit(self: Self) void {
-        self.file.close();
-        self.line_buf.deinit();
-    }
-
     fn advance_line(self: *Self) !void {
-        self.line_buf.clearRetainingCapacity();
-        try self.reader.streamUntilDelimiter(self.line_buf.writer(), '\n', null);
-        try self.line_buf.append('\n');
+        if (self.line_num >= self.source.get_line_count()) {
+            return Error.EndOfFile;
+        }
         self.line_num += 1;
+        self.line_buf = self.source.get_line(self.line_num).?;
         self.col = 0;
-        self.unicode_view = try std.unicode.Utf8View.init(self.line_buf.items);
+        self.unicode_view = try std.unicode.Utf8View.init(self.line_buf);
         self.unicode_iterator = self.unicode_view.iterator();
     }
 
@@ -122,6 +114,8 @@ pub const TokenKind = enum {
     NUMBER,
     IDENTIFIER,
     STRING_LITERAL,
+    TRUE,
+    FALSE,
 
     STRUCT,
     ENUM,
@@ -143,63 +137,63 @@ pub const TokenKind = enum {
     MUT,
 };
 
-const SourceInfo = struct {
-    path: []const u8,
-    line: u64,
-    col: u64,
+const TokenSource = struct {
+    file: *const SourceFile,
+    line: u32,
+    col: u32,
 };
 
 pub const Token = struct {
     kind: TokenKind,
-    source: SourceInfo,
+    source: TokenSource,
     str: ?[]const u8,
 };
 
 pub const Lexer = struct {
     scanner: Scanner,
-    path: []const u8,
     allocator: std.mem.Allocator,
 
     const Self = @This();
 
-    pub fn init(allocator: std.mem.Allocator, path: []const u8) !Self {
+    pub fn init(allocator: std.mem.Allocator, source_file: *const SourceFile) !Self {
         return Self{
-            .scanner = try Scanner.init(allocator, path),
-            .path = path,
+            .scanner = try Scanner.init(source_file),
             .allocator = allocator,
         };
     }
 
-    pub fn deinit(self: Self) void {
-        self.scanner.deinit();
-    }
-
-    fn move_to_ascii(self: *Self) void {
+    fn consume_until_ascii(self: *Self) void {
         var codepoint = self.scanner.peek() orelse return;
         while (codepoint.len > 1) {
             _ = self.scanner.consume();
-            self.print_error(
-                &.{ .path = self.path, .line = self.scanner.line_num, .col = self.scanner.col },
+            errmsg.print_error(
+                .Error,
+                self.scanner.source,
+                self.scanner.line_num,
+                self.scanner.col,
                 1,
                 "Invalid Character Error: Unicode character '{s}'",
                 .{codepoint},
                 "please remove, unicode character '{s}' may only be used inside a string literal",
                 .{codepoint},
-            ) catch {};
+            );
             codepoint = self.scanner.peek() orelse return;
         }
     }
 
     fn consume_ascii(self: *Self) ?u8 {
-        self.move_to_ascii();
+        self.consume_until_ascii();
         const codepoint = self.scanner.consume() orelse return null;
         std.debug.assert(codepoint.len == 1);
         return codepoint[0];
     }
 
     fn peek_ascii(self: *Self) ?u8 {
-        self.move_to_ascii();
+        self.consume_until_ascii();
         const codepoint = self.scanner.peek() orelse return null;
+        if (codepoint.len != 1) {
+            std.debug.print("Codepoint: '{s}'", .{codepoint});
+        }
         std.debug.assert(codepoint.len == 1);
         return codepoint[0];
     }
@@ -213,7 +207,7 @@ pub const Lexer = struct {
         var token = Token{
             .kind = TokenKind.INVALID,
             .source = .{
-                .path = self.path,
+                .file = self.scanner.source,
                 .line = self.scanner.line_num,
                 .col = self.scanner.col,
             },
@@ -354,14 +348,17 @@ pub const Lexer = struct {
                     token.str = try self.allocator.dupe(u8, buffer.items);
                 } else {
                     token.kind = TokenKind.INVALID;
-                    self.print_error(
-                        &token.source,
+                    errmsg.print_error(
+                        .Error,
+                        token.source.file,
+                        token.source.line,
+                        token.source.col,
                         buffer.items.len + 1,
                         "Syntax Error: Unterminated string literal",
                         .{},
                         "add terminating '\"'",
                         .{},
-                    ) catch {};
+                    );
                 }
             },
             '0'...'9' => {
@@ -414,6 +411,8 @@ pub const Lexer = struct {
                             token.kind = TokenKind.FN;
                         } else if (std.mem.eql(u8, buffer.items[1..], "or")) {
                             token.kind = TokenKind.FOR;
+                        } else if (std.mem.eql(u8, buffer.items[1..], "alse")) {
+                            token.kind = TokenKind.FALSE;
                         }
                     },
                     'i' => {
@@ -453,6 +452,8 @@ pub const Lexer = struct {
                     't' => {
                         if (std.mem.eql(u8, buffer.items[1..], "rait")) {
                             token.kind = TokenKind.TRAIT;
+                        } else if (std.mem.eql(u8, buffer.items[1..], "rue")) {
+                            token.kind = TokenKind.TRUE;
                         }
                     },
                     'u' => {
@@ -474,93 +475,22 @@ pub const Lexer = struct {
                 }
             },
             else => {
-                self.print_error(
-                    &token.source,
+                errmsg.print_error(
+                    .Error,
+                    token.source.file,
+                    token.source.line,
+                    token.source.col,
                     1,
                     "Syntax Error: Invalid token '{s}'",
                     .{buffer.items},
                     "please remove, '{s}' may only be used inside a string literal",
                     .{buffer.items},
-                ) catch {};
+                );
                 token.kind = TokenKind.INVALID;
                 token.str = try self.allocator.dupe(u8, buffer.items);
             },
         }
 
         return token;
-    }
-
-    pub fn print_error(
-        self: *Self,
-        source: *const SourceInfo,
-        highlight_len: usize,
-        comptime err_fmt: []const u8,
-        err_args: anytype,
-        comptime hint_fmt: []const u8,
-        hint_args: anytype,
-    ) !void {
-        std.debug.assert(source.line > 0);
-
-        if (source.line != self.scanner.line_num) {
-            return;
-        }
-
-        var digit_count: u32 = 0;
-        var line_remainder = source.line;
-        while (line_remainder != 0) {
-            line_remainder /= 10;
-            digit_count += 1;
-        }
-
-        const stderr_file = std.io.getStdErr().writer();
-        var bw = std.io.bufferedWriter(stderr_file);
-        const stderr = bw.writer();
-
-        for (0..digit_count + 2) |_| {
-            try stderr.writeByte('-');
-        }
-        try stderr.print("# {s}:{}:{} - ", .{ source.path, source.line, source.col });
-        try stderr.print(err_fmt, err_args);
-        try stderr.writeByte('\n');
-
-        for (0..digit_count + 2) |_| {
-            try stderr.writeByte(' ');
-        }
-        try stderr.writeByte('|');
-        try stderr.writeByte('\n');
-
-        try stderr.print(" {} | {s}", .{ source.line, self.scanner.line_buf.items });
-
-        for (0..digit_count + 2) |_| {
-            try stderr.writeByte(' ');
-        }
-        try stderr.writeByte('|');
-
-        std.debug.assert(source.col > 0);
-
-        for (0..source.col) |_| {
-            try stderr.writeByte(' ');
-        }
-        for (0..highlight_len) |_| {
-            try stderr.writeByte('^');
-        }
-        try stderr.writeByte('\n');
-
-        for (0..digit_count + 2) |_| {
-            try stderr.writeByte(' ');
-        }
-        try stderr.writeByte('|');
-        try stderr.writeByte(' ');
-        _ = try stderr.write("hint: ");
-        try stderr.print(hint_fmt, hint_args);
-        try stderr.writeByte('\n');
-
-        for (0..digit_count + 2) |_| {
-            try stderr.writeByte(' ');
-        }
-        try stderr.writeByte('|');
-        try stderr.writeByte('\n');
-
-        try bw.flush();
     }
 };
