@@ -73,10 +73,22 @@ pub fn TaggedUnionList(comptime T: type) type {
 
         const Self = @This();
 
-        pub const Index = struct {
-            tag: Tag,
+        pub const Index = u128;
+        const InternalIndex = struct {
             index: usize,
+            tag: Tag,
         };
+
+        fn index_internal_to_primitive(internal: InternalIndex) Index {
+            return (@as(u128, @intFromEnum(internal.tag)) << 64) + @as(u128, internal.index);
+        }
+
+        fn index_primitive_to_internal(primitive: Index) InternalIndex {
+            return InternalIndex{
+                .index = primitive & ((1 << 64) - 1),
+                .tag = @enumFromInt(primitive >> 64),
+            };
+        }
 
         pub fn init(allocator: std.mem.Allocator) Self {
             var array_lists: [metadata.unique_sizes_count]std.ArrayList(u8) = undefined;
@@ -105,12 +117,14 @@ pub fn TaggedUnionList(comptime T: type) type {
                     const insert_index = self.data[outer_idx].items.len / size;
                     try self.data[outer_idx].appendSlice(&raw_item);
 
-                    return Index{ .tag = tag, .index = insert_index };
+                    const internal_index = InternalIndex{ .tag = tag, .index = insert_index };
+                    return index_internal_to_primitive(internal_index);
                 },
             }
         }
 
-        pub fn get(self: *Self, index: Index) T {
+        pub fn get(self: *Self, primitive_index: Index) T {
+            const index = index_primitive_to_internal(primitive_index);
             switch (index.tag) {
                 inline else => |tag| {
                     const outer_idx: usize = comptime @intFromEnum(tag);

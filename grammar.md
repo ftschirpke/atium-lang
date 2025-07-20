@@ -25,6 +25,7 @@ float_number = dec_num "." dec_num
 literal = "null" | number | float_number | """ ascii_char """
 
 basic_type = void
+           | bool
            | i8 | i16 | i32 | i64
            | u8 | u16 | u32 | u64
 type = basic_type

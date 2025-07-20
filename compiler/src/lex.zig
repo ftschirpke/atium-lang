@@ -87,10 +87,18 @@ pub const TokenKind = enum {
     DOUBLE_PLUS,
     DOUBLE_ASTERISK,
 
+    DOUBLE_LESS,
+    DOUBLE_GREATER,
+
     PLUS,
     MINUS,
     ASTERISK,
     SLASH,
+
+    PIPE,
+    AMPERSAND,
+    CARET,
+    TILDE,
 
     LPAREN,
     RPAREN,
@@ -147,6 +155,97 @@ pub const Token = struct {
     kind: TokenKind,
     source: TokenSource,
     str: ?[]const u8,
+
+    const Self = @This();
+
+    pub fn len(self: *const Self) u32 {
+        switch (self.kind) {
+            TokenKind.INVALID => {
+                std.debug.assert(false);
+                return 1;
+            },
+            TokenKind.DOT,
+            TokenKind.COMMA,
+            TokenKind.COLON,
+            TokenKind.SEMICOLON,
+            TokenKind.PIPE,
+            TokenKind.AMPERSAND,
+            TokenKind.CARET,
+            TokenKind.TILDE,
+            TokenKind.PLUS,
+            TokenKind.MINUS,
+            TokenKind.ASTERISK,
+            TokenKind.LPAREN,
+            TokenKind.RPAREN,
+            TokenKind.LBRACE,
+            TokenKind.RBRACE,
+            TokenKind.LBRACKET,
+            TokenKind.RBRACKET,
+            TokenKind.EXCLAMATION,
+            TokenKind.QUESTION,
+            TokenKind.ASSIGN,
+            TokenKind.GREATER,
+            TokenKind.LESS,
+            TokenKind.SLASH,
+            => {
+                return 1;
+            },
+            TokenKind.IF,
+            TokenKind.IN,
+            TokenKind.OR,
+            TokenKind.ARROW,
+            TokenKind.DOUBLE_GREATER,
+            TokenKind.DOUBLE_LESS,
+            TokenKind.DOUBLE_PLUS,
+            TokenKind.DOUBLE_DOT,
+            TokenKind.DOUBLE_ASTERISK,
+            TokenKind.EQUAL,
+            TokenKind.NOT_EQUAL,
+            TokenKind.GREATER_EQUAL,
+            TokenKind.FN,
+            TokenKind.LESS_EQUAL,
+            => {
+                return 2;
+            },
+            TokenKind.OWN,
+            TokenKind.FOR,
+            TokenKind.AND,
+            TokenKind.LET,
+            TokenKind.MUT,
+            => {
+                return 3;
+            },
+            TokenKind.TRUE,
+            TokenKind.ENUM,
+            TokenKind.ELSE,
+            => {
+                return 4;
+            },
+            TokenKind.WHILE,
+            TokenKind.FALSE,
+            TokenKind.UNION,
+            TokenKind.TRAIT,
+            TokenKind.BREAK,
+            => {
+                return 5;
+            },
+            TokenKind.STRUCT,
+            TokenKind.RETURN,
+            => {
+                return 6;
+            },
+            TokenKind.CONTINUE,
+            => {
+                return 8;
+            },
+            TokenKind.NUMBER,
+            TokenKind.IDENTIFIER,
+            TokenKind.STRING_LITERAL,
+            => {
+                return @truncate(self.str.?.len);
+            },
+        }
+    }
 };
 
 pub const Lexer = struct {
@@ -231,6 +330,10 @@ pub const Lexer = struct {
             ',' => token.kind = TokenKind.COMMA,
             ':' => token.kind = TokenKind.COLON,
             ';' => token.kind = TokenKind.SEMICOLON,
+            '|' => token.kind = TokenKind.PIPE,
+            '&' => token.kind = TokenKind.AMPERSAND,
+            '^' => token.kind = TokenKind.CARET,
+            '~' => token.kind = TokenKind.TILDE,
             '(' => token.kind = TokenKind.LPAREN,
             ')' => token.kind = TokenKind.RPAREN,
             '{' => token.kind = TokenKind.LBRACE,
@@ -316,6 +419,9 @@ pub const Lexer = struct {
                 if (next != null and next.? == '=') {
                     _ = self.consume_ascii();
                     token.kind = TokenKind.GREATER_EQUAL;
+                } else if (next != null and next.? == '>') {
+                    _ = self.consume_ascii();
+                    token.kind = TokenKind.DOUBLE_GREATER;
                 } else {
                     token.kind = TokenKind.GREATER;
                 }
@@ -325,6 +431,9 @@ pub const Lexer = struct {
                 if (next != null and next.? == '=') {
                     _ = self.consume_ascii();
                     token.kind = TokenKind.LESS_EQUAL;
+                } else if (next != null and next.? == '<') {
+                    _ = self.consume_ascii();
+                    token.kind = TokenKind.DOUBLE_LESS;
                 } else {
                     token.kind = TokenKind.LESS;
                 }

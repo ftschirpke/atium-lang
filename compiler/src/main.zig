@@ -83,9 +83,10 @@ fn lex(allocator: std.mem.Allocator, writer: anytype, filepath: []const u8) !voi
 }
 
 fn parse(allocator: std.mem.Allocator, writer: anytype, filepath: []const u8) !void {
-    var lexer = try lib.lex.Lexer.init(allocator, filepath);
-    defer lexer.deinit();
+    const source_file = try lib.sources.SourceFile.parse_from_file(allocator, filepath);
+    defer source_file.deinit();
 
+    var lexer = try lib.lex.Lexer.init(allocator, &source_file);
     var parser = lib.parse.Parser.init(allocator, &lexer);
     defer parser.deinit();
 
