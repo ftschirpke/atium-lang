@@ -667,6 +667,12 @@ pub const Parser = struct {
         self.next_token = try self.lexer.next_token();
 
         while (self.has_next()) {
+            if (self.next_token.?.kind == lex.TokenKind.EOF) {
+                _ = self.consume_token() catch {
+                    unreachable;
+                };
+                continue;
+            }
             // HACK: only to test current implementation
             const index = try self.parse_expression();
             try self.ast.top_level.append(self.allocator, index);

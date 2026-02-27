@@ -118,7 +118,9 @@ pub const SourceReader = struct {
             _ = try new_self.get_next_line();
         } else if (starting_line_idx < source.line_starts.items.len) {
             const line_start_char_idx = source.line_starts.items[starting_line_idx];
-            new_self.reader.interface.toss(line_start_char_idx);
+            new_self.reader.interface.discardAll(line_start_char_idx) catch {
+                unreachable;
+            };
             new_self.line_num = starting_line_idx;
             _ = try new_self.get_next_line();
         } else {
@@ -127,7 +129,9 @@ pub const SourceReader = struct {
             const remaining = starting_line_idx - last_recorded_line_idx;
 
             const line_start_char_idx = source.line_starts.items[last_recorded_line_idx];
-            new_self.reader.interface.toss(line_start_char_idx);
+            new_self.reader.interface.discardAll(line_start_char_idx) catch {
+                unreachable;
+            };
             new_self.line_num = last_recorded_line_idx;
 
             for (0..remaining) |_| {

@@ -43,7 +43,7 @@ pub fn main() void {
         } else if (std.mem.eql(u8, cmd, "parse")) {
             command = Command.PARSE;
         } else {
-            std.log.err("Unsupported command provided: {s}; Expected lex/ast", .{cmd});
+            std.log.err("Unsupported command provided: {s}; Expected lex/parse", .{cmd});
         }
     } else {
         std.log.err("No command provided (lex/ast)", .{});
@@ -140,12 +140,16 @@ fn parse(allocator: std.mem.Allocator, writer: *std.Io.Writer, filepath: []const
     };
     defer parser.deinit();
 
-    writer.print("TODO: print parsing result\n", .{}) catch |err| {
-        lib.errmsg.error_writer(err);
-        return;
-    };
-
     parser.parse() catch |err| {
         std.log.err("Error occured while parsing: {}", .{err});
+    };
+
+    const footprint = parser.ast.item_list.memory_footprint();
+    writer.print("Finished parsing and got AST with size {} vs {} naive\n", .{
+        footprint.this,
+        footprint.naive,
+    }) catch |err| {
+        lib.errmsg.error_writer(err);
+        return;
     };
 }
