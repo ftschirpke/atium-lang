@@ -2,9 +2,10 @@
 const std = @import("std");
 
 pub const collections = @import("collections.zig");
+pub const errmsg = @import("error_messages.zig");
 pub const lex = @import("lex.zig");
 pub const parse = @import("parse.zig");
-pub const sources = @import("sources.zig");
+pub const world = @import("world.zig");
 
 pub export fn sub(a: i32, b: i32) i32 {
     return a - b;
