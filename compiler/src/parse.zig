@@ -1,17 +1,18 @@
+// SPDX-License-Identifier: MIT
 const std = @import("std");
 
 const collections = @import("collections.zig");
 const errmsg = @import("error_messages.zig");
 const lex = @import("lex.zig");
+const id = @import("id.zig");
 
-const SourceFile = @import("sources.zig").SourceFile;
+const SourceFile = @import("world.zig").SourceFile;
 
 const AstItemList = collections.TaggedUnionList(AstItem);
-const AstItemIndex = u128;
 
 const AstIndex = struct {
     source_index: usize,
-    item_index: AstItemIndex,
+    item_index: id.IdType,
 };
 
 const AstItem = union(enum) {
@@ -74,7 +75,7 @@ const AstItem = union(enum) {
 };
 
 const AstItemSource = struct {
-    file: *const SourceFile,
+    file: *SourceFile,
     line: u32,
     col: u32,
     highlight_len: u32,
@@ -92,6 +93,7 @@ const AstItemSource = struct {
 };
 
 const Ast = struct {
+    allocator: std.mem.Allocator,
     item_list: AstItemList,
     sources: std.ArrayList(AstItemSource),
     top_level: std.ArrayList(Index),
@@ -99,26 +101,27 @@ const Ast = struct {
     const Self = @This();
     const Index = AstIndex;
 
-    pub fn init(allocator: std.mem.Allocator) Self {
-        const item_list = AstItemList.init(allocator);
-        const sources = std.ArrayList(AstItemSource).init(allocator);
-        const top_level = std.ArrayList(Index).init(allocator);
+    pub fn init(allocator: std.mem.Allocator) !Self {
+        const item_list = try AstItemList.init(allocator);
+        const sources = try std.ArrayList(AstItemSource).initCapacity(allocator, 10);
+        const top_level = try std.ArrayList(Index).initCapacity(allocator, 40);
         return Self{
+            .allocator = allocator,
             .item_list = item_list,
             .sources = sources,
             .top_level = top_level,
         };
     }
 
-    pub fn deinit(self: Self) void {
+    pub fn deinit(self: *Self) void {
         self.item_list.deinit();
-        self.sources.deinit();
-        self.top_level.deinit();
+        self.sources.deinit(self.allocator);
+        self.top_level.deinit(self.allocator);
     }
 
     pub fn append(self: *Self, item: AstItem, source: AstItemSource) !Index {
         const source_index = self.sources.items.len;
-        try self.sources.append(source);
+        try self.sources.append(self.allocator, source);
         const item_index = self.item_list.append(item) catch |err| {
             _ = self.sources.pop();
             return err;
@@ -137,11 +140,11 @@ pub const Parser = struct {
     allocator: std.mem.Allocator,
 
     const Self = @This();
-    const Error = error{ InvalidToken, MissingToken, OutOfMemory };
+    const Error = error{ InvalidToken, MissingToken, OutOfMemory, OutOfIndexSpace };
 
-    pub fn init(allocator: std.mem.Allocator, lexer: *lex.Lexer) Self {
-        comptime std.debug.assert(AstItemIndex == AstItemList.Index);
-        const ast = Ast.init(allocator);
+    pub fn init(allocator: std.mem.Allocator, lexer: *lex.Lexer) !Self {
+        // TODO: why was this here? comptime std.debug.assert(AstItemIndex == AstItemList.Index);
+        const ast = try Ast.init(allocator);
         return Self{
             .ast = ast,
             .lexer = lexer,
@@ -150,7 +153,7 @@ pub const Parser = struct {
         };
     }
 
-    pub fn deinit(self: Self) void {
+    pub fn deinit(self: *Self) void {
         self.ast.deinit();
     }
 
@@ -437,10 +440,10 @@ pub const Parser = struct {
                 },
                 lex.TokenKind.LPAREN => {
                     _ = try self.consume_token();
-                    var args = std.ArrayList(Ast.Index).init(self.allocator);
+                    var args = try std.ArrayList(Ast.Index).initCapacity(self.allocator, 4);
                     while (!self.check_next(lex.TokenKind.RPAREN)) {
                         const expr = try self.parse_expression();
-                        try args.append(expr);
+                        try args.append(self.allocator, expr);
                         if (self.check_next(lex.TokenKind.COMMA)) {
                             _ = try self.consume_token();
                         }
@@ -664,9 +667,15 @@ pub const Parser = struct {
         self.next_token = try self.lexer.next_token();
 
         while (self.has_next()) {
+            if (self.next_token.?.kind == lex.TokenKind.EOF) {
+                _ = self.consume_token() catch {
+                    unreachable;
+                };
+                continue;
+            }
             // HACK: only to test current implementation
             const index = try self.parse_expression();
-            try self.ast.top_level.append(index);
+            try self.ast.top_level.append(self.allocator, index);
         }
     }
 };
@@ -711,6 +720,6 @@ test "parse and-or-expression" {
     var parser = Parser.init(allocator, &lexer);
     defer parser.deinit();
 
-    const expr_idx = try parser.parse_expression();
+    try parser.parse_expression();
     // TODO: check result
 }

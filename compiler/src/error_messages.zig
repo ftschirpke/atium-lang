@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 const std = @import("std");
 
-const SourceFile = @import("sources.zig").SourceFile;
+const SourceFile = @import("world.zig").SourceFile;
 
 pub const ErrorLevel = enum {
     Error,
@@ -9,9 +9,21 @@ pub const ErrorLevel = enum {
     Info,
 };
 
+pub fn error_file_open(path: []const u8, err: anyerror) void {
+    std.log.err("Could not open file {s} - {}", .{ path, err });
+}
+
+pub fn error_writer(err: anyerror) void {
+    std.log.err("Unexpected problem occured while writing output - {}", .{err});
+}
+
+pub fn error_oom(err: error{OutOfMemory}) void {
+    std.log.err("Unexpected out of memory error - {}", .{err});
+}
+
 pub fn print_error(
     level: ErrorLevel,
-    source: *const SourceFile,
+    source: *SourceFile,
     line_number: u32,
     column: u32,
     highlight_len: usize,
@@ -20,9 +32,9 @@ pub fn print_error(
     comptime hint_fmt: ?[]const u8,
     hint_args: anytype,
 ) void {
-    const stderr_file = std.io.getStdErr().writer();
-    var bw = std.io.bufferedWriter(stderr_file);
-    const stderr = bw.writer();
+    var stderr_buffer: [256]u8 = undefined;
+    var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);
+    const stderr = &stderr_writer.interface;
 
     const attempts = 5;
     for (0..attempts) |_| {
@@ -43,7 +55,7 @@ pub fn print_error(
         break;
     }
     for (0..attempts) |_| {
-        bw.flush() catch {
+        stderr.flush() catch {
             continue;
         };
         break;
@@ -53,7 +65,7 @@ pub fn print_error(
 fn generic_print_error(
     writer: anytype,
     level: ErrorLevel,
-    source: *const SourceFile,
+    source: *SourceFile,
     line_number: u32,
     column: u32,
     highlight_len: usize,
@@ -62,9 +74,7 @@ fn generic_print_error(
     comptime hint_fmt: ?[]const u8,
     hint_args: anytype,
 ) !void {
-    const line_buf_opt = source.get_line(line_number);
-    std.debug.assert(line_buf_opt != null);
-    const line_buf = line_buf_opt.?;
+    const line_buf = try source.get_line(line_number);
 
     var digit_count: u32 = 0;
     var line_remainder = line_number;
@@ -76,7 +86,7 @@ fn generic_print_error(
     for (0..digit_count + 2) |_| {
         try writer.writeByte('-');
     }
-    try writer.print("# {s}:{}:{} - ", .{ source.name.items, line_number, column });
+    try writer.print("# {s}:{}:{} - ", .{ source.path.items, line_number, column });
 
     // TODO: improve usage of error level e.g. with the use of colors
     switch (level) {

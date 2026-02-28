@@ -22,7 +22,7 @@ number = dec_num | bin_num | oct_num | hex_num
 
 float_number = dec_num "." dec_num
 
-literal = "null" | number | float_number | """ ascii_char """
+literal = "null" | number | float_number | "'" ascii_char "'"
 
 basic_type = void
            | bool

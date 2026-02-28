@@ -5,7 +5,7 @@ const third_party = @import("../third-party/build.zig");
 
 const MLIRBuildError = error{OutOfMemory};
 
-pub fn build(
+pub fn build_subproject(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
@@ -23,11 +23,12 @@ pub fn build(
         .root_module = lib_mod,
     });
 
-    lib.step.dependOn(&llvm.build_step.step);
+    const include_path = llvm.install_path.path(b, "include");
+    const lib_path = llvm.install_path.path(b, "lib");
 
-    lib.addSystemIncludePath(try llvm.install_path.join(b.allocator, "include"));
-    lib.addLibraryPath(try llvm.install_path.join(b.allocator, "lib"));
-    lib.linkSystemLibrary("MLIRSupport");
+    lib.root_module.addIncludePath(include_path);
+
+    lib.root_module.addObjectFile(lib_path.path(b, "libMLIRSupport.a"));
 
     b.installArtifact(lib);
 }

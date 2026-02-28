@@ -7,9 +7,13 @@
 
 const std = @import("std");
 
-const MAX_SIZES = 64;
+const id = @import("id.zig");
+
+const MAX_SIZES = 32;
 
 pub fn TaggedUnionList(comptime T: type) type {
+    const Error = error{OutOfIndexSpace};
+
     const Tag = std.meta.Tag(T);
 
     const tag_values = std.enums.values(Tag);
@@ -55,11 +59,27 @@ pub fn TaggedUnionList(comptime T: type) type {
                 size_index_for_field[field_index] = unique_size_index.?;
             }
 
+            const pub_index = id.IdType;
+            const element_index_type = u32;
+            const priv_index = struct {
+                index: element_index_type,
+                tag: Tag,
+            };
+            const idx_split = @bitSizeOf(element_index_type);
+            if (@bitSizeOf(Tag) > (@bitSizeOf(pub_index) - idx_split)) {
+                @compileError("Union has too many fields to fit into merged union index");
+            }
+            const max_data_index = std.math.maxInt(element_index_type);
+
             break :md .{
                 .max_unique_size = max_unique_size,
+                .max_data_index = max_data_index,
                 .unique_sizes_count = unique_sizes_count,
                 .unique_sizes = unique_sizes,
                 .size_index_for_field = size_index_for_field,
+                .public_index = pub_index,
+                .private_index = priv_index,
+                .index_split_offset = idx_split,
             };
         },
         else => @compileError("Only unions allowed as inner type."),
@@ -73,34 +93,31 @@ pub fn TaggedUnionList(comptime T: type) type {
 
         const Self = @This();
 
-        pub const Index = u128;
-        const InternalIndex = struct {
-            index: usize,
-            tag: Tag,
-        };
+        pub const Index = metadata.public_index;
+        const InternalIndex = metadata.private_index;
 
         fn index_internal_to_primitive(internal: InternalIndex) Index {
-            return (@as(u128, @intFromEnum(internal.tag)) << 64) + @as(u128, internal.index);
+            return (@as(Index, @intFromEnum(internal.tag)) << metadata.index_split_offset) + @as(Index, internal.index);
         }
 
         fn index_primitive_to_internal(primitive: Index) InternalIndex {
             return InternalIndex{
                 .index = @truncate(primitive),
-                .tag = @enumFromInt(primitive >> 64),
+                .tag = @enumFromInt(primitive >> metadata.index_split_offset),
             };
         }
 
-        pub fn init(allocator: std.mem.Allocator) Self {
+        pub fn init(allocator: std.mem.Allocator) !Self {
             var array_lists: [metadata.unique_sizes_count]std.ArrayList(u8) = undefined;
             for (0..metadata.unique_sizes_count) |i| {
-                array_lists[i] = std.ArrayList(u8).init(allocator);
+                array_lists[i] = try std.ArrayList(u8).initCapacity(allocator, 10);
             }
             return Self{ .allocator = allocator, .data = array_lists };
         }
 
-        pub fn deinit(self: Self) void {
-            for (self.data) |array_list| {
-                array_list.deinit();
+        pub fn deinit(self: *Self) void {
+            for (0..self.data.len) |i| {
+                self.data[i].deinit(self.allocator);
             }
         }
 
@@ -114,9 +131,12 @@ pub fn TaggedUnionList(comptime T: type) type {
 
                     const raw_item: [size]u8 = std.mem.toBytes(@field(item, tag_names[tag_num]));
                     const insert_index = self.data[outer_idx].items.len / size;
-                    try self.data[outer_idx].appendSlice(&raw_item);
+                    if (insert_index > metadata.max_data_index) {
+                        return Error.OutOfIndexSpace;
+                    }
+                    try self.data[outer_idx].appendSlice(self.allocator, &raw_item);
 
-                    const internal_index = InternalIndex{ .tag = tag, .index = insert_index };
+                    const internal_index = InternalIndex{ .tag = tag, .index = @truncate(insert_index) };
                     return index_internal_to_primitive(internal_index);
                 },
             }
@@ -154,7 +174,7 @@ pub fn TaggedUnionList(comptime T: type) type {
     };
 }
 
-test "add and retrieve elements" {
+test "TaggedUnionList - add and retrieve elements" {
     const inner = struct {
         a: u64,
         b: u64,
@@ -169,8 +189,9 @@ test "add and retrieve elements" {
 
     const small_size = @sizeOf(u16);
     const big_size = @sizeOf(inner);
+    std.debug.assert(big_size == @sizeOf(u128));
 
-    var list = List.init(std.testing.allocator);
+    var list = try List.init(std.testing.allocator);
     defer list.deinit();
 
     const test_elem1 = Union{ .small = 42 };
@@ -213,4 +234,88 @@ test "add and retrieve elements" {
     const get4 = list.get(idx4);
     try std.testing.expectEqual(std.meta.activeTag(get4), @field(Tag, "small"));
     try std.testing.expectEqual(get4.small, 987);
+}
+
+pub fn RingBuffer(comptime T: type, capacity: comptime_int) type {
+    return struct {
+        items: [capacity]T,
+        cur: usize,
+        len: usize,
+
+        const Self = @This();
+
+        const Error = error{ IndexOutOfBounds, TooManyElementsForCapacity, RequestedMoreElementsThanAvailable };
+
+        pub const SplitSlice = struct {
+            first: []const T,
+            second: ?[]const T,
+        };
+
+        pub fn init() Self {
+            return Self{
+                .items = {},
+                .cur = 0,
+                .len = 0,
+            };
+        }
+
+        pub fn initFromSlice(slice: []const T) !Self {
+            if (slice.len > capacity) return Error.TooManyElementsForCapacity;
+            var self = init();
+            for (slice) |item| {
+                self.add(item);
+            }
+            return self;
+        }
+
+        fn advance_cur(self: *Self, count: usize) void {
+            for (0..count) |_| {
+                self.cur += 1;
+                if (self.cur == capacity) {
+                    self.cur = 0;
+                }
+            }
+        }
+
+        pub fn add(self: *Self, item: T) void {
+            if (self.len < capacity) {
+                const index = (self.cur + self.len) % capacity;
+                self.items[index] = item;
+                self.len += 1;
+            } else {
+                self.items[self.cur] = item;
+                self.advance_cur(1);
+            }
+        }
+
+        fn get(self: *const Self, count: usize) []const T {
+            const end = @min(self.cur + count, capacity);
+            return self.items[self.cur..end];
+        }
+
+        fn peek(self: *const Self, count: usize) Error!SplitSlice {
+            if (count > self.len) {
+                return Error.RequestedMoreElementsThanAvailable;
+            }
+            const first = self.get(count);
+            const remaining = count - first.len;
+            if (remaining == 0) {
+                return SplitSlice{
+                    .first = first,
+                    .second = null,
+                };
+            } else {
+                return SplitSlice{
+                    .first = first,
+                    .second = self.get(remaining),
+                };
+            }
+        }
+
+        fn consume(self: *Self, count: usize) Error!SplitSlice {
+            const split_slice = try peek(count);
+            self.advance_cur(count);
+            return split_slice;
+        }
+    };
 }
