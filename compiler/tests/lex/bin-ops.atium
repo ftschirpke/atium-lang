@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: MIT
+
+// CMD: ./zig-out/bin/compiler lex %
+// RET: ZERO
+
+(true and false)
+// TEST: LPAREN TRUE AND FALSE RPAREN
+false or (2 == 4);
+// TEST: FALSE OR LPAREN NUMBER("2") EQUAL NUMBER("4") RPAREN SEMICOLON
+42 != 124
+// TEST: NUMBER("42") NOT_EQUAL NUMBER("124")
+13 < 40 and "abc" > "def"
+// TEST: NUMBER("13") LESS NUMBER("40") AND STRING_LITERAL("abc") GREATER STRING_LITERAL("def")
+my_var <= 42 or other_var >= 100
+// TEST: IDENTIFIER("my_var") LESS_EQUAL NUMBER("42") OR IDENTIFIER("other_var") GREATER_EQUAL NUMBER("100")
+
+// TODO: extend test case with arithmetic binary operations
+
+

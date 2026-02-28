@@ -36,7 +36,7 @@ type = basic_type
      | "(" type [ "," type ]* ")"
      | ident
 
-bin_bool_op = "==" | "!=" | "<" | ">" | "<=" | ">="
+bin_bool_op = "and" | "or" | "==" | "!=" | "<" | ">" | "<=" | ">="
 bin_arith_op = "+" | "-" | "/" | "*" | "<<" | ">>" | "&" | "|" | "^" | "++" | "**"
 bin_op = bin_bool_op | bin_arith_op
 prefix_bool_op = "!"

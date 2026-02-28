@@ -4,6 +4,7 @@ const std = @import("std");
 const third_party_build = @import("third-party/build.zig");
 const mlir_zig = @import("mlir-zig/build.zig");
 const compiler = @import("compiler/build.zig");
+const filetest = @import("tool-filetest/build.zig");
 
 const BuildError = error{ MissingLibrary, OutOfMemory, InvalidPath };
 
@@ -15,4 +16,6 @@ pub fn build(b: *std.Build) BuildError!void {
 
     try mlir_zig.build_subproject(b, target, optimize, &llvm);
     try compiler.build_subproject(b, target, optimize);
+
+    try filetest.build_subproject(b, target, optimize);
 }

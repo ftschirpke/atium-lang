@@ -26,10 +26,6 @@ pub fn main() void {
     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
     const stdout = &stdout_writer.interface;
 
-    stdout.print("Result of {} + {} = {}.\n", .{ 4, 2, mlir.add(4, 2) }) catch |err| {
-        lib.errmsg.error_writer(err);
-        return;
-    };
     stdout.flush() catch |err| {
         lib.errmsg.error_writer(err);
         return;
@@ -50,6 +46,19 @@ pub fn main() void {
     }
 
     const filepath = args.next();
+    const flag = args.next();
+    var verbose = false;
+    if (flag) |flag_slice| {
+        if (flag_slice[0] == '-') {
+            for (flag_slice[1..]) |c| {
+                switch (c) {
+                    'v' => verbose = true,
+                    else => {},
+                }
+            }
+        }
+    }
+
     if (filepath) |path| {
         std.fs.cwd().access(path, .{}) catch |err| {
             std.log.err("Error occured when accessing the specified file '{s}': {}", .{ path, err });
@@ -59,8 +68,8 @@ pub fn main() void {
             return;
         };
         switch (command) {
-            Command.LEX => lex(gpa, stdout, absolute_path),
-            Command.PARSE => parse(gpa, stdout, absolute_path),
+            Command.LEX => lex(gpa, stdout, absolute_path, verbose),
+            Command.PARSE => parse(gpa, stdout, absolute_path, verbose),
         }
     }
 
@@ -70,7 +79,7 @@ pub fn main() void {
     };
 }
 
-fn lex(allocator: std.mem.Allocator, writer: *std.Io.Writer, filepath: []const u8) void {
+fn lex(allocator: std.mem.Allocator, writer: *std.Io.Writer, filepath: []const u8, verbose: bool) void {
     var world = lib.world.World.init(allocator);
     defer world.deinit();
     const source_file = world.source_file(filepath) catch |err| {
@@ -90,13 +99,23 @@ fn lex(allocator: std.mem.Allocator, writer: *std.Io.Writer, filepath: []const u
     var line: u32 = 0;
     while (opt_token != null) {
         const token = opt_token.?;
+        const line_before = line;
         while (line < token.source.line) {
-            writer.print("\n{d:4} > ", .{line + 1}) catch |err| {
+            if (verbose) {
+                writer.print("\n{d:4} > ", .{line + 1}) catch |err| {
+                    lib.errmsg.error_writer(err);
+                    return;
+                };
+            }
+            line += 1;
+        }
+        if (!verbose and line_before != line and line_before != 0) {
+            writer.print("\n", .{}) catch |err| {
                 lib.errmsg.error_writer(err);
                 return;
             };
-            line += 1;
         }
+
         switch (token.kind) {
             TokenKind.IDENTIFIER, TokenKind.INVALID, TokenKind.NUMBER, TokenKind.STRING_LITERAL => {
                 writer.print("{s}(\"{s}\") ", .{ @tagName(token.kind), token.str orelse return }) catch |err| {
@@ -122,7 +141,7 @@ fn lex(allocator: std.mem.Allocator, writer: *std.Io.Writer, filepath: []const u
     };
 }
 
-fn parse(allocator: std.mem.Allocator, writer: *std.Io.Writer, filepath: []const u8) void {
+fn parse(allocator: std.mem.Allocator, writer: *std.Io.Writer, filepath: []const u8, verbose: bool) void {
     var world = lib.world.World.init(allocator);
     defer world.deinit();
     const source_file = world.source_file(filepath) catch |err| {
@@ -145,11 +164,13 @@ fn parse(allocator: std.mem.Allocator, writer: *std.Io.Writer, filepath: []const
     };
 
     const footprint = parser.ast.item_list.memory_footprint();
-    writer.print("Finished parsing and got AST with size {} vs {} naive\n", .{
-        footprint.this,
-        footprint.naive,
-    }) catch |err| {
-        lib.errmsg.error_writer(err);
-        return;
-    };
+    if (verbose) {
+        writer.print("Finished parsing and got AST with size {} vs {} naive\n", .{
+            footprint.this,
+            footprint.naive,
+        }) catch |err| {
+            lib.errmsg.error_writer(err);
+            return;
+        };
+    }
 }
