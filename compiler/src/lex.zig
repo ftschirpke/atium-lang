@@ -19,6 +19,7 @@ const Scanner = struct {
     const Error = error{ FileOpenError, InvalidSourceFile, EndOfFile };
 
     fn init(source: *SourceFile) !Self {
+        // TODO: allow one-line source files
         var reader = source.reader() catch {
             return Error.FileOpenError;
         };

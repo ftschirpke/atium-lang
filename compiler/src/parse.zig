@@ -256,6 +256,61 @@ pub const Parser = struct {
         return self.has_next() and self.next_token.?.kind == expected;
     }
 
+    fn parse_statement(self: *Self) Error!Ast.Index {
+        if (!self.has_next()) {
+            return Error.MissingToken;
+        }
+        switch (self.next_token.?.kind) {
+            lex.TokenKind.IDENTIFIER => return self.parse_assign_statement(),
+            lex.TokenKind.LET => return self.parse_let_statement(),
+            lex.TokenKind.IF => return self.parse_if_statement(),
+            lex.TokenKind.FOR => return self.parse_for_statement(),
+            lex.TokenKind.WHILE => return self.parse_while_statement(),
+            else => return Error.InvalidToken,
+        }
+    }
+
+    fn parse_assign_statement(self: *Self) Error!Ast.Index {
+        var expr = AstItem{
+            .assign = .{
+                .left_expr = undefined,
+                .right_expr = undefined,
+                .operation = .NONE,
+            },
+        };
+        std.debug.assert(self.check_next(lex.TokenKind.LET));
+        _ = try self.consume_token();
+        expr.assign.left_expr = try self.parse_expression();
+        if (!self.has_next()) {
+            return Error.MissingToken;
+        }
+        // switch (self.next_token.?.kind) {
+        //     lex.TokenKind.
+        // }
+        expr.assign.right_expr = try self.parse_expression();
+        return Error.InvalidToken;
+    }
+
+    fn parse_let_statement(self: *Self) Error!Ast.Index {
+        std.debug.assert(self.has_next());
+        return Error.InvalidToken;
+    }
+
+    fn parse_if_statement(self: *Self) Error!Ast.Index {
+        std.debug.assert(self.has_next());
+        return Error.InvalidToken;
+    }
+
+    fn parse_for_statement(self: *Self) Error!Ast.Index {
+        std.debug.assert(self.has_next());
+        return Error.InvalidToken;
+    }
+
+    fn parse_while_statement(self: *Self) Error!Ast.Index {
+        std.debug.assert(self.has_next());
+        return Error.InvalidToken;
+    }
+
     fn parse_expression(self: *Self) Error!Ast.Index {
         return self.parse_or_expression();
     }
@@ -759,7 +814,7 @@ pub const Parser = struct {
                 continue;
             }
             // HACK: only to test current implementation
-            const index = try self.parse_expression();
+            const index = try self.parse_statement();
             try self.ast.top_level.append(self.allocator, index);
         }
     }
