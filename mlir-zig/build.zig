@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: MIT
 const std = @import("std");
 
-const third_party = @import("../third-party/build.zig");
-
 const MLIRBuildError = error{OutOfMemory};
 
 pub fn build_subproject(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
+    third_party: type,
     llvm: *const third_party.LLVMBuild,
 ) MLIRBuildError!void {
     const lib_mod = b.addModule("mlir_zig", .{

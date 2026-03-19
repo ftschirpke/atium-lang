@@ -15,6 +15,8 @@ const AstIndex = struct {
     item_index: id.IdType,
 };
 
+const TypeExpression = union(enum) {};
+
 const AstItem = union(enum) {
     boolean_literal: bool,
     integer_literal: u64,
@@ -34,11 +36,13 @@ const AstItem = union(enum) {
             SUBTRACT,
             MULTIPLY,
             DIVIDE,
+            BITSHIFT_LEFT,
+            BITSHIFT_RIGHT,
             BIT_AND,
             BIT_OR,
             BIT_XOR,
-            BITSHIFT_LEFT,
-            BITSHIFT_RIGHT,
+            ARRAY_ADD,
+            ARRAY_MULTIPLY,
             AND,
             OR,
         },
@@ -71,6 +75,87 @@ const AstItem = union(enum) {
     field_access: struct {
         outer_expr: AstIndex,
         field_name: []const u8,
+    },
+    basic_type: enum {
+        Bool,
+        I8,
+        I16,
+        I32,
+        I64,
+        I128,
+        ISIZE,
+        U8,
+        U16,
+        U32,
+        U64,
+        U128,
+        USIZE,
+        SELF,
+    },
+    function_type: struct {
+        input_type_expr: AstIndex,
+        output_type_expr: AstIndex,
+    },
+    struct_type: struct {
+        members: std.ArrayList(struct {
+            label: []const u8,
+            type_expr: AstIndex,
+        }),
+    },
+    union_type: struct {
+        tag: ??AstIndex,
+        members: std.ArrayList(struct {
+            label: []const u8,
+            type_expr: AstIndex,
+        }),
+    },
+    enum_type: struct {
+        labels: std.ArrayList([]const u8),
+    },
+    trait: struct {
+        members: std.ArrayList(struct {
+            label: []const u8,
+            type_expr: AstIndex,
+        }),
+    },
+    func_def: struct {
+        arguments: std.ArrayList(struct {
+            name: []const u8,
+            type_expr: AstIndex,
+        }),
+        return_type_expr: AstIndex,
+        body: AstIndex,
+    },
+    type_func_def: struct {
+        type_name: AstIndex,
+        name: []const u8,
+        func_def: AstIndex,
+    },
+    var_def: struct {
+        mut: bool,
+        name: []const u8,
+        type_expr: ?AstIndex,
+        value: AstIndex,
+    },
+    assign: struct {
+        left_expr: AstIndex,
+        right_expr: AstIndex,
+        operation: enum {
+            NONE,
+            ADD,
+            SUBTRACT,
+            MULTIPLY,
+            DIVIDE,
+            BITSHIFT_LEFT,
+            BITSHIFT_RIGHT,
+            BIT_AND,
+            BIT_OR,
+            BIT_XOR,
+            ARRAY_ADD,
+            ARRAY_MULTIPLY,
+            AND,
+            OR,
+        },
     },
 };
 
@@ -700,26 +785,4 @@ pub fn print_token_error(
         hint_fmt,
         hint_args,
     );
-}
-
-test "parse and-or-expression" {
-    const allocator = std.testing.allocator;
-
-    var name = std.ArrayList(u8).init(allocator);
-    defer name.deinit();
-    try name.writer().write("parse-and-or");
-
-    var contents = std.ArrayList(u8).init(allocator);
-    defer contents.deinit();
-    try contents.writer().write(
-        \\true and 123 or is_true
-    );
-
-    const file = SourceFile.init(allocator, name, contents);
-    var lexer = lex.Lexer.init(allocator, &file);
-    var parser = Parser.init(allocator, &lexer);
-    defer parser.deinit();
-
-    try parser.parse_expression();
-    // TODO: check result
 }

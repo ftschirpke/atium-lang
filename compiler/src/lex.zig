@@ -143,6 +143,8 @@ pub const TokenKind = enum {
     ENUM,
     UNION,
     TRAIT,
+    SELF,
+    SELF_TYPE,
     FN,
     OWN,
     FOR,
@@ -235,6 +237,8 @@ pub const Token = struct {
             TokenKind.TRUE,
             TokenKind.ENUM,
             TokenKind.ELSE,
+            TokenKind.SELF,
+            TokenKind.SELF_TYPE,
             => {
                 return 4;
             },
@@ -590,6 +594,13 @@ pub const Lexer = struct {
                     's' => {
                         if (std.mem.eql(u8, buffer.items[1..], "truct")) {
                             token.kind = TokenKind.STRUCT;
+                        } else if (std.mem.eql(u8, buffer.items[1..], "elf")) {
+                            token.kind = TokenKind.SELF;
+                        }
+                    },
+                    'S' => {
+                        if (std.mem.eql(u8, buffer.items[1..], "elf")) {
+                            token.kind = TokenKind.SELF_TYPE;
                         }
                     },
                     't' => {

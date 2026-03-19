@@ -10,6 +10,7 @@ letter = "a" | ... | "z" | "A" | ... | "Z"
 digit = "0" | ... | "9"
 
 ident = [ letter | "_" ] [ letter | "_" | digit ]*
+typed_ident = ident ":" type
 
 dec_num = digit [ digit | "_" ]*
 bin_digit = "0" | "1"
@@ -32,9 +33,14 @@ type = basic_type
      | "*" type 
      | "*" "own" type 
      | "[" [ number | "_" ]? "]" type
-     | "mut" type
+     | type
      | "(" type [ "," type ]* ")"
+     | type "->" type
      | ident
+     | struct
+     | enum
+     | union
+     | interface
 
 bin_bool_op = "==" | "!=" | "<" | ">" | "<=" | ">="
 bin_arith_op = "+" | "-" | "/" | "*" | "<<" | ">>" | "&" | "|" | "^" | "++" | "**"
@@ -45,7 +51,7 @@ prefix_op = prefix_bool_op | prefix_arith_op
 
 assign_op = "=" | bin_arith_op"="
 
-capture = "|" ident "|"
+capture = "|" [ ident | typed_ident ] "|"
 
 expr = prefix_op expr
      | expr bin_op expr
@@ -64,7 +70,7 @@ expr = prefix_op expr
 var = ident | "(" var "," var [ "," var ]* ")"
 typed_var = var ":" type
 
-define_stmt = [ [ "let" | "mut" ] typed_var | "_" ] "=" expr ";"
+define_stmt = [ "let" "mut"? [ var | typed_var ] | "_" ] "=" expr ";"
 assign_stmt = ident assign_op expr ";"
 
 return_stmt = "return" expr? ";"
@@ -77,13 +83,10 @@ stmt = assign_stmt | return_stmt | loop_op_stmt | if_stmt | for_stmt | while_stm
 func_head = "fn" ident "(" [ typed-var "," ]* ")" "->" type
 func_def = func_head "{" stmt* "}"
 
-struct_def = "struct" ident "{" [ typed_var "," ]* func_def* "}"
-
-enum_def = "enum" ident "{" [ ident "," ]* func_def* "}"
-
-union_def = "union" ident [ "(" [ "enum" | type ] ")" ]? "{" [ typed_var "," ]* func_def* "}"
-
-trait_def = "trait" ident "{" [ func_head "," | func_def ]* "}"
+struct = "struct" "{" [ typed_var "," ]* "}"
+enum = "enum" "{" [ ident "," ]* "}"
+union = "union" [ "(" [ "enum" | type ] ")" ]? "{" [ typed_var "," ]* "}"
+interface = "interface" "{" [ typed_var "," ]* "}"
 
 ```
 
