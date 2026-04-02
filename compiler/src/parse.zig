@@ -74,7 +74,7 @@ const AstItem = union(enum) {
     },
     field_access: struct {
         outer_expr: AstIndex,
-        field_name: []const u8,
+        field_name: AstIndex,
     },
     basic_type: enum {
         Bool,
@@ -278,22 +278,92 @@ pub const Parser = struct {
                 .operation = .NONE,
             },
         };
-        std.debug.assert(self.check_next(lex.TokenKind.LET));
-        _ = try self.consume_token();
         expr.assign.left_expr = try self.parse_expression();
         if (!self.has_next()) {
             return Error.MissingToken;
         }
-        // switch (self.next_token.?.kind) {
-        //     lex.TokenKind.
-        // }
+        var source_token = undefined;
+        const assign_token = try self.consume_token();
+        switch (assign_token.kind) {
+            lex.TokenKind.EQUAL => {
+                expr.assign.operation = .NONE;
+                source_token = assign_token;
+            },
+            lex.TokenKind.PLUS => expr.assign.operation = .ADD,
+            lex.TokenKind.MINUS => expr.assign.operation = .SUBTRACT,
+            lex.TokenKind.ASTERISK => expr.assign.operation = .MULTIPLY,
+            lex.TokenKind.SLASH => expr.assign.operation = .DIVIDE,
+            lex.TokenKind.DOUBLE_LESS => expr.assign.operation = .BITSHIFT_LEFT,
+            lex.TokenKind.DOUBLE_GREATER => expr.assign.operation = .BITSHIFT_RIGHT,
+            lex.TokenKind.AMPERSAND => expr.assign.operation = .BIT_AND,
+            lex.TokenKind.PIPE => expr.assign.operation = .BIT_OR,
+            lex.TokenKind.CARET => expr.assign.operation = .BIT_XOR,
+            lex.TokenKind.DOUBLE_PLUS => expr.assign.operation = .ARRAY_ADD,
+            lex.TokenKind.DOUBLE_ASTERISK => expr.assign.operation = .ARRAY_MULTIPLY,
+            lex.TokenKind.AND => expr.assign.operation = .AND,
+            lex.TokenKind.OR => expr.assign.operation = .OR,
+            else => {
+                print_token_error(
+                    .Error,
+                    &assign_token,
+                    "Expected assign statement but found unexpected token {}.",
+                    .{assign_token.kind},
+                    "",
+                    .{},
+                );
+                return Error.InvalidToken;
+            },
+        }
+        if (expr.assign.operation != .NONE) {
+            const equal_token = try self.consume_token();
+            std.debug.assert(equal_token.kind == lex.TokenKind.EQUAL);
+            source_token = equal_token;
+        }
         expr.assign.right_expr = try self.parse_expression();
-        return Error.InvalidToken;
+        return self.ast.append(expr, AstItemSource.from_token(source_token));
     }
 
     fn parse_let_statement(self: *Self) Error!Ast.Index {
+        var expr = AstItem{
+            .define = .{
+                .name = undefined,
+                .type_expr = null,
+                .expr = undefined,
+            },
+        };
         std.debug.assert(self.has_next());
-        return Error.InvalidToken;
+        const let_token = try self.consume_token();
+        std.debug.assert(let_token.kind == .LET);
+
+        expr.define.name = try self.parse_nonoperator_expression();
+
+        if (!self.has_next()) {
+            return Error.MissingToken;
+        }
+        if (self.next_token.?.kind == lex.TokenKind.COLON) {
+            _ = try self.consume_token();
+            expr.define.type_expr = try self.parse_nonoperator_expression();
+        }
+
+        if (!self.has_next()) {
+            return Error.MissingToken;
+        }
+        if (self.next_token.?.kind != lex.TokenKind.EQUAL) {
+            print_token_error(
+                .Error,
+                &self.next_token.?,
+                "Found non-equal token after begin of let statement.",
+                .{},
+                "Ensure your let statement has an equal sign.",
+                .{},
+            );
+            return Error.InvalidToken;
+        }
+        _ = try self.consume_token();
+
+        expr.define.expr = self.parse_expression();
+
+        return self.ast.append(expr, AstItemSource.from_token(let_token));
     }
 
     fn parse_if_statement(self: *Self) Error!Ast.Index {
@@ -508,7 +578,7 @@ pub const Parser = struct {
     }
 
     fn parse_arithmetic_unary_expression(self: *Self) Error!Ast.Index {
-        const inner_expr = try self.parse_access_expression();
+        const inner_expr = try self.parse_nonoperator_expression();
         if (!self.has_next()) {
             return inner_expr;
         }
@@ -527,7 +597,7 @@ pub const Parser = struct {
         return self.ast.append(expr, AstItemSource.from_token(op_token));
     }
 
-    fn parse_access_expression(self: *Self) Error!Ast.Index {
+    fn parse_nonoperator_expression(self: *Self) Error!Ast.Index {
         var outer_expr = try self.parse_prioritized_expression();
         outer_loop: while (true) {
             if (!self.has_next()) {
@@ -814,7 +884,7 @@ pub const Parser = struct {
                 continue;
             }
             // HACK: only to test current implementation
-            const index = try self.parse_statement();
+            const index = try self.parse_let_statement();
             try self.ast.top_level.append(self.allocator, index);
         }
     }
