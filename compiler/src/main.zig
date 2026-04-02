@@ -98,7 +98,12 @@ fn lex(allocator: std.mem.Allocator, writer: *std.Io.Writer, filepath: []const u
             line += 1;
         }
         switch (token.kind) {
-            TokenKind.IDENTIFIER, TokenKind.INVALID, TokenKind.NUMBER, TokenKind.STRING_LITERAL => {
+            TokenKind.BASIC_TYPE,
+            TokenKind.IDENTIFIER,
+            TokenKind.INVALID,
+            TokenKind.NUMBER,
+            TokenKind.STRING_LITERAL,
+            => {
                 writer.print("{s}(\"{s}\") ", .{ @tagName(token.kind), token.str orelse return }) catch |err| {
                     lib.errmsg.error_writer(err);
                     return;

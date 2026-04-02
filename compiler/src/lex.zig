@@ -134,6 +134,7 @@ pub const TokenKind = enum {
 
     ASSIGN,
 
+    BASIC_TYPE,
     NUMBER,
     IDENTIFIER,
     STRING_LITERAL,
@@ -260,6 +261,7 @@ pub const Token = struct {
             => {
                 return 8;
             },
+            TokenKind.BASIC_TYPE,
             TokenKind.NUMBER,
             TokenKind.IDENTIFIER,
             TokenKind.STRING_LITERAL,
@@ -540,6 +542,9 @@ pub const Lexer = struct {
                     'b' => {
                         if (std.mem.eql(u8, buffer.items[1..], "reak")) {
                             token.kind = TokenKind.BREAK;
+                        } else if (std.mem.eql(u8, buffer.items[1..], "ool")) {
+                            token.kind = TokenKind.BASIC_TYPE;
+                            token.str = try self.allocator.dupe(u8, buffer.items);
                         }
                     },
                     'c' => {
@@ -568,6 +573,14 @@ pub const Lexer = struct {
                             token.kind = TokenKind.IF;
                         } else if (std.mem.eql(u8, buffer.items[1..], "n")) {
                             token.kind = TokenKind.IN;
+                        } else if (std.mem.eql(u8, buffer.items[1..], "8") or
+                            std.mem.eql(u8, buffer.items[1..], "16") or
+                            std.mem.eql(u8, buffer.items[1..], "32") or
+                            std.mem.eql(u8, buffer.items[1..], "64") or
+                            std.mem.eql(u8, buffer.items[1..], "128"))
+                        {
+                            token.kind = TokenKind.BASIC_TYPE;
+                            token.str = try self.allocator.dupe(u8, buffer.items);
                         }
                     },
                     'l' => {
@@ -614,6 +627,20 @@ pub const Lexer = struct {
                     'u' => {
                         if (std.mem.eql(u8, buffer.items[1..], "nion")) {
                             token.kind = TokenKind.UNION;
+                        } else if (std.mem.eql(u8, buffer.items[1..], "8") or
+                            std.mem.eql(u8, buffer.items[1..], "16") or
+                            std.mem.eql(u8, buffer.items[1..], "32") or
+                            std.mem.eql(u8, buffer.items[1..], "64") or
+                            std.mem.eql(u8, buffer.items[1..], "128"))
+                        {
+                            token.kind = TokenKind.BASIC_TYPE;
+                            token.str = try self.allocator.dupe(u8, buffer.items);
+                        }
+                    },
+                    'v' => {
+                        if (std.mem.eql(u8, buffer.items[1..], "oid")) {
+                            token.kind = TokenKind.BASIC_TYPE;
+                            token.str = try self.allocator.dupe(u8, buffer.items);
                         }
                     },
                     'w' => {
