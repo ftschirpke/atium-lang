@@ -1,0 +1,13 @@
+// RUN: %{compiler} parse %s 2>&1 | FileCheck %s
+// NOTE: Fails until parse_let_statement (parse.zig:377) changes EQUAL -> ASSIGN
+let input = 42;
+let limit = input - 1;
+let is_large = input > 10;
+let scaled = input * 2;
+let message = "computing";
+let mut accumulator = 0;
+let flags = is_large and accumulator == 0;
+let bits = scaled & 255;
+
+// CHECK-NOT: ERROR
+// CHECK-NOT: WARNING

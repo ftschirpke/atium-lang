@@ -1,0 +1,14 @@
+// RUN: %{compiler} lex %s 2>&1 | FileCheck %s
+let x: i32 = 42;
+
+
+let y: bool = true;
+
+
+let z = "hello";
+
+// CHECK:    2 > LET IDENTIFIER("x") COLON BASIC_TYPE("i32") ASSIGN NUMBER("42") SEMICOLON
+// CHECK:    5 > LET IDENTIFIER("y") COLON BASIC_TYPE("bool") ASSIGN TRUE SEMICOLON
+// CHECK:    8 > LET IDENTIFIER("z") ASSIGN STRING_LITERAL("hello") SEMICOLON
+// CHECK-NOT: ERROR
+// CHECK-NOT: WARNING

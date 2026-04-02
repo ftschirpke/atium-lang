@@ -1,0 +1,19 @@
+// RUN: %{compiler} lex %s 2>&1 | FileCheck %s
+let Point = struct {
+    x: i32,
+    y: i32,
+};
+
+let Drawable = trait {
+    draw: *Self -> void,
+};
+
+// CHECK:    2 > LET IDENTIFIER("Point") ASSIGN STRUCT LBRACE
+// CHECK:    3 > IDENTIFIER("x") COLON BASIC_TYPE("i32") COMMA
+// CHECK:    4 > IDENTIFIER("y") COLON BASIC_TYPE("i32") COMMA
+// CHECK:    5 > RBRACE SEMICOLON
+// CHECK:    7 > LET IDENTIFIER("Drawable") ASSIGN TRAIT LBRACE
+// CHECK:    8 > IDENTIFIER("draw") COLON ASTERISK SELF_TYPE ARROW BASIC_TYPE("void") COMMA
+// CHECK:    9 > RBRACE SEMICOLON
+// CHECK-NOT: ERROR
+// CHECK-NOT: WARNING

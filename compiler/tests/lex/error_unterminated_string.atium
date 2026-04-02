@@ -1,0 +1,7 @@
+// RUN: %{compiler} lex %s 2>&1 | FileCheck %s
+"unterminated
+42
+
+// The lexer reports an error for the unterminated string on stderr.
+// CHECK: ERROR Syntax Error: Unterminated string literal
+// CHECK: hint: add terminating '"'

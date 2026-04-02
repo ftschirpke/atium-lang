@@ -1,0 +1,9 @@
+// RUN: %{compiler} parse %s 2>&1 | FileCheck %s
+// NOTE: Fails until parse_let_statement (parse.zig:377) changes EQUAL -> ASSIGN
+let eq = a == b;
+let ne = x != y;
+let lt = p < q;
+let ge = m >= n;
+
+// CHECK-NOT: ERROR
+// CHECK-NOT: WARNING

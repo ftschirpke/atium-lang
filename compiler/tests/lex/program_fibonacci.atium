@@ -1,0 +1,20 @@
+// RUN: %{compiler} lex %s 2>&1 | FileCheck %s
+let fib = fn (n: u64) -> u64 {
+    if n <= 1 {
+        return n;
+    }
+    let a = fib(n - 1);
+    let b = fib(n - 2);
+    return a ++ b;
+}
+
+// CHECK:    2 > LET IDENTIFIER("fib") ASSIGN FN LPAREN IDENTIFIER("n") COLON BASIC_TYPE("u64") RPAREN ARROW BASIC_TYPE("u64") LBRACE
+// CHECK:    3 > IF IDENTIFIER("n") LESS_EQUAL NUMBER("1") LBRACE
+// CHECK:    4 > RETURN IDENTIFIER("n") SEMICOLON
+// CHECK:    5 > RBRACE
+// CHECK:    6 > LET IDENTIFIER("a") ASSIGN IDENTIFIER("fib") LPAREN IDENTIFIER("n") MINUS NUMBER("1") RPAREN SEMICOLON
+// CHECK:    7 > LET IDENTIFIER("b") ASSIGN IDENTIFIER("fib") LPAREN IDENTIFIER("n") MINUS NUMBER("2") RPAREN SEMICOLON
+// CHECK:    8 > RETURN IDENTIFIER("a") DOUBLE_PLUS IDENTIFIER("b") SEMICOLON
+// CHECK:    9 > RBRACE
+// CHECK-NOT: ERROR
+// CHECK-NOT: WARNING
