@@ -144,7 +144,7 @@ pub const TokenKind = enum {
     STRUCT,
     ENUM,
     UNION,
-    TRAIT,
+    INTERFACE,
     SELF,
     SELF_TYPE,
     FN,
@@ -247,7 +247,6 @@ pub const Token = struct {
             TokenKind.WHILE,
             TokenKind.FALSE,
             TokenKind.UNION,
-            TokenKind.TRAIT,
             TokenKind.BREAK,
             => {
                 return 5;
@@ -260,6 +259,10 @@ pub const Token = struct {
             TokenKind.CONTINUE,
             => {
                 return 8;
+            },
+            TokenKind.INTERFACE,
+            => {
+                return 9;
             },
             TokenKind.BASIC_TYPE,
             TokenKind.NUMBER,
@@ -573,6 +576,8 @@ pub const Lexer = struct {
                             token.kind = TokenKind.IF;
                         } else if (std.mem.eql(u8, buffer.items[1..], "n")) {
                             token.kind = TokenKind.IN;
+                        } else if (std.mem.eql(u8, buffer.items[1..], "nterface")) {
+                            token.kind = TokenKind.INTERFACE;
                         } else if (std.mem.eql(u8, buffer.items[1..], "8") or
                             std.mem.eql(u8, buffer.items[1..], "16") or
                             std.mem.eql(u8, buffer.items[1..], "32") or
@@ -618,9 +623,7 @@ pub const Lexer = struct {
                         }
                     },
                     't' => {
-                        if (std.mem.eql(u8, buffer.items[1..], "rait")) {
-                            token.kind = TokenKind.TRAIT;
-                        } else if (std.mem.eql(u8, buffer.items[1..], "rue")) {
+                        if (std.mem.eql(u8, buffer.items[1..], "rue")) {
                             token.kind = TokenKind.TRUE;
                         }
                     },

@@ -112,7 +112,7 @@ const AstItem = union(enum) {
     enum_type: struct {
         labels: std.ArrayList([]const u8),
     },
-    trait: struct {
+    interface: struct {
         members: std.ArrayList(struct {
             label: AstIndex,
             type_expr: AstIndex,

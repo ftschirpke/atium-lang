@@ -2,7 +2,7 @@
 let Point = struct { x: u32, y: u32, };
 let Color = enum { red, green, blue, };
 let Data = union { x: u32, };
-let Drawable = trait { draw: *own Self -> void, };
+let Drawable = interface { draw: *own Self -> void, };
 let main = fn () -> void {
     let x = true;
     let mut y = false;
@@ -16,7 +16,7 @@ let main = fn () -> void {
 // CHECK:    2 > LET IDENTIFIER("Point") ASSIGN STRUCT LBRACE IDENTIFIER("x") COLON BASIC_TYPE("u32") COMMA IDENTIFIER("y") COLON BASIC_TYPE("u32") COMMA RBRACE SEMICOLON
 // CHECK:    3 > LET IDENTIFIER("Color") ASSIGN ENUM LBRACE IDENTIFIER("red") COMMA IDENTIFIER("green") COMMA IDENTIFIER("blue") COMMA RBRACE SEMICOLON
 // CHECK:    4 > LET IDENTIFIER("Data") ASSIGN UNION LBRACE IDENTIFIER("x") COLON BASIC_TYPE("u32") COMMA RBRACE SEMICOLON
-// CHECK:    5 > LET IDENTIFIER("Drawable") ASSIGN TRAIT LBRACE IDENTIFIER("draw") COLON ASTERISK OWN SELF_TYPE ARROW BASIC_TYPE("void") COMMA RBRACE SEMICOLON
+// CHECK:    5 > LET IDENTIFIER("Drawable") ASSIGN INTERFACE LBRACE IDENTIFIER("draw") COLON ASTERISK OWN SELF_TYPE ARROW BASIC_TYPE("void") COMMA RBRACE SEMICOLON
 // CHECK:    6 > LET IDENTIFIER("main") ASSIGN FN LPAREN RPAREN ARROW BASIC_TYPE("void") LBRACE
 // CHECK:    7 > LET IDENTIFIER("x") ASSIGN TRUE SEMICOLON
 // CHECK:    8 > LET MUT IDENTIFIER("y") ASSIGN FALSE SEMICOLON
