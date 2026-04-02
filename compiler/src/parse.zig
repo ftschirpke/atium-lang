@@ -114,13 +114,13 @@ const AstItem = union(enum) {
     },
     trait: struct {
         members: std.ArrayList(struct {
-            label: []const u8,
+            label: AstIndex,
             type_expr: AstIndex,
         }),
     },
     func_def: struct {
         arguments: std.ArrayList(struct {
-            name: []const u8,
+            name: AstIndex,
             type_expr: AstIndex,
         }),
         return_type_expr: AstIndex,
@@ -128,12 +128,12 @@ const AstItem = union(enum) {
     },
     type_func_def: struct {
         type_name: AstIndex,
-        name: []const u8,
+        name: AstIndex,
         func_def: AstIndex,
     },
     var_def: struct {
         mut: bool,
-        name: []const u8,
+        name: AstIndex,
         type_expr: ?AstIndex,
         value: AstIndex,
     },
@@ -325,24 +325,50 @@ pub const Parser = struct {
 
     fn parse_let_statement(self: *Self) Error!Ast.Index {
         var expr = AstItem{
-            .define = .{
+            .var_def = .{
+                .mut = false,
                 .name = undefined,
                 .type_expr = null,
-                .expr = undefined,
+                .value = undefined,
             },
         };
         std.debug.assert(self.has_next());
         const let_token = try self.consume_token();
         std.debug.assert(let_token.kind == .LET);
 
-        expr.define.name = try self.parse_nonoperator_expression();
+        if (!self.has_next()) {
+            return Error.MissingToken;
+        }
+        if (self.check_next(lex.TokenKind.MUT)) {
+            expr.var_def.mut = true;
+            _ = try self.consume_token();
+        }
+
+        expr.var_def.name = try self.parse_nonoperator_expression();
+        const name = self.ast.item_list.get(expr.var_def.name.item_index);
+        if (expr.var_def.mut) {
+            switch (name) {
+                .identifier => {},
+                else => {
+                    print_token_error(
+                        .Error,
+                        &self.next_token.?,
+                        "Found non-identifier token after begin of mutable let statement.",
+                        .{},
+                        "Only variables can be defined as mutable.",
+                        .{},
+                    );
+                    return Error.InvalidToken;
+                },
+            }
+        }
 
         if (!self.has_next()) {
             return Error.MissingToken;
         }
         if (self.next_token.?.kind == lex.TokenKind.COLON) {
             _ = try self.consume_token();
-            expr.define.type_expr = try self.parse_nonoperator_expression();
+            expr.var_def.type_expr = try self.parse_nonoperator_expression();
         }
 
         if (!self.has_next()) {
@@ -361,7 +387,7 @@ pub const Parser = struct {
         }
         _ = try self.consume_token();
 
-        expr.define.expr = self.parse_expression();
+        expr.var_def.value = try self.parse_expression();
 
         return self.ast.append(expr, AstItemSource.from_token(let_token));
     }
@@ -752,7 +778,7 @@ pub const Parser = struct {
                             const expr = AstItem{
                                 .field_access = .{
                                     .outer_expr = outer_expr,
-                                    .field_name = token.str.?,
+                                    .field_name = try self.parse_nonoperator_expression(),
                                 },
                             };
                             outer_expr = try self.ast.append(expr, AstItemSource.from_token(access_token));
