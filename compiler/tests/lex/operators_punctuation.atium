@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // RUN: %{compiler} lex %s 2>&1 | FileCheck %s
 . .. , : ; ~ ( ) { } [ ] ?;
 

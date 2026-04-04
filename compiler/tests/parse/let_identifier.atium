@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // RUN: %{compiler} parse %s 2>&1 | FileCheck %s
 // NOTE: Fails until parse_let_statement (parse.zig:377) changes EQUAL -> ASSIGN
 let y = x;
