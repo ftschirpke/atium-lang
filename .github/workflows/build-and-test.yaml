@@ -36,10 +36,10 @@ jobs:
         run: pip install lit
 
       - name: Check formatting
-        run: find . -maxdepth 2 -type d -name "src" -exec zig fmt --check {} \;
+        run: fmt --check compiler/src
 
       - name: Build (${{ matrix.optimize }})
         run: zig build -Dllvm-prefix=/usr/lib/llvm-21 -Doptimize=${{ matrix.optimize }}
 
       - name: Run tests (${{ matrix.optimize }})
-        run: find . -maxdepth 2 -type d -name "tests" -exec lit {} -v \;
+        run: lit compiler/tests -v
