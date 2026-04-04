@@ -40,11 +40,16 @@ jobs:
       - name: Install lit
         run: pip install lit
 
+      - name: Check Tool Versions
+        run: |
+          FileCheck --version
+          lit --version
+
       - name: Check formatting
-        run: zig fmt --check compiler/src
+        run: find . -maxdepth 2 -type d -name src | xargs zig fmt --check
 
       - name: Build (${{ matrix.optimize }})
         run: zig build -Dllvm-prefix=/usr/lib/llvm-21 -Doptimize=${{ matrix.optimize }}
 
       - name: Run tests (${{ matrix.optimize }})
-        run: lit compiler/tests -v
+        run: find . -maxdepth 2 -type d -name src | xargs lit -v
