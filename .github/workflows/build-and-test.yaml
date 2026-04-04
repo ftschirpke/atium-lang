@@ -48,10 +48,10 @@ jobs:
           lit --version
 
       - name: Check formatting
-        run: find . -maxdepth 2 -type d -name src | xargs zig fmt --check
+        run: find . -maxdepth 2 -type d -name "src" | xargs zig fmt --check
 
       - name: Build (${{ matrix.optimize }})
         run: zig build -Dllvm-prefix=/usr/lib/llvm-22 -Doptimize=${{ matrix.optimize }}
 
       - name: Run tests (${{ matrix.optimize }})
-        run: find . -maxdepth 2 -type d -name src | xargs lit -v
+        run: find . -maxdepth 2 -type d -name "tests" | xargs lit -v
