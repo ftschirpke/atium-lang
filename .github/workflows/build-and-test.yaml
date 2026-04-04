@@ -32,6 +32,11 @@ jobs:
       - name: Install LLVM 21
         run: sudo apt-get install -y llvm-21 llvm-21-dev libmlir-21-dev
 
+      - name: Setup venv
+        run: |
+          python3 -m venv venv
+          source venv/bin/activate
+
       - name: Install lit
         run: pip install lit
 
@@ -43,3 +48,6 @@ jobs:
 
       - name: Run tests (${{ matrix.optimize }})
         run: lit compiler/tests -v
+
+      - name: Deactivate venv
+        run: deactivate
