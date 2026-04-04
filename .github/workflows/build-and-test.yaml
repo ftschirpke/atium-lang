@@ -41,7 +41,7 @@ jobs:
         run: pip install lit
 
       - name: Check formatting
-        run: fmt --check compiler/src
+        run: zig fmt --check compiler/src
 
       - name: Build (${{ matrix.optimize }})
         run: zig build -Dllvm-prefix=/usr/lib/llvm-21 -Doptimize=${{ matrix.optimize }}
