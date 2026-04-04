@@ -8,6 +8,11 @@ pub const LLVMBuild = struct {
     install_path: std.Build.LazyPath,
 };
 
+pub fn system_llvm(prefix: []const u8) LLVMBuild {
+    const lazy = std.Build.LazyPath{ .cwd_relative = prefix };
+    return LLVMBuild{ .build_path = lazy, .install_path = lazy };
+}
+
 pub fn build_llvm(b: *std.Build, optimize: std.builtin.OptimizeMode) LLVMBuildError!LLVMBuild {
     const cwd = b.path("third-party");
     const name = "llvm";

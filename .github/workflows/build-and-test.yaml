@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: MIT
+name: Build and Test
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        optimize: [Debug, ReleaseFast]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: "0.14.1"
+
+      - name: Add LLVM 21 apt repository
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-21 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get update -qq
+
+      - name: Install LLVM 21
+        run: sudo apt-get install -y llvm-21 llvm-21-dev libmlir-21-dev
+
+      - name: Install lit
+        run: pip install lit
+
+      - name: Check formatting
+        run: find . -maxdepth 2 -type d -name "src" -exec zig fmt --check {} \;
+
+      - name: Build (${{ matrix.optimize }})
+        run: zig build -Dllvm-prefix=/usr/lib/llvm-21 -Doptimize=${{ matrix.optimize }}
+
+      - name: Run tests (${{ matrix.optimize }})
+        run: find . -maxdepth 2 -type d -name "tests" -exec lit {} -v \;
