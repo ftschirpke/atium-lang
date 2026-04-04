@@ -30,12 +30,15 @@ jobs:
           sudo apt-get update -qq
 
       - name: Install LLVM 21
-        run: sudo apt-get install -y llvm-21 llvm-21-dev libmlir-21-dev llvm-21-tools
+        run: sudo apt-get install -y llvm-21 llvm-21-dev libmlir-21-dev
 
       - name: Setup venv
         run: |
           python3 -m venv venv
           source venv/bin/activate
+
+      - name: Install FileCheck
+        run: pip install filecheck
 
       - name: Install lit
         run: pip install lit
