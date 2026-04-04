@@ -142,8 +142,7 @@ pub const TokenKind = enum {
     FALSE,
 
     STRUCT,
-    ENUM,
-    UNION,
+    VARIANT,
     INTERFACE,
     SELF,
     SELF_TYPE,
@@ -237,7 +236,6 @@ pub const Token = struct {
                 return 3;
             },
             TokenKind.TRUE,
-            TokenKind.ENUM,
             TokenKind.ELSE,
             TokenKind.SELF,
             TokenKind.SELF_TYPE,
@@ -246,7 +244,6 @@ pub const Token = struct {
             },
             TokenKind.WHILE,
             TokenKind.FALSE,
-            TokenKind.UNION,
             TokenKind.BREAK,
             => {
                 return 5;
@@ -255,6 +252,10 @@ pub const Token = struct {
             TokenKind.RETURN,
             => {
                 return 6;
+            },
+            TokenKind.VARIANT,
+            => {
+                return 7;
             },
             TokenKind.CONTINUE,
             => {
@@ -558,8 +559,6 @@ pub const Lexer = struct {
                     'e' => {
                         if (std.mem.eql(u8, buffer.items[1..], "lse")) {
                             token.kind = TokenKind.ELSE;
-                        } else if (std.mem.eql(u8, buffer.items[1..], "num")) {
-                            token.kind = TokenKind.ENUM;
                         }
                     },
                     'f' => {
@@ -628,9 +627,7 @@ pub const Lexer = struct {
                         }
                     },
                     'u' => {
-                        if (std.mem.eql(u8, buffer.items[1..], "nion")) {
-                            token.kind = TokenKind.UNION;
-                        } else if (std.mem.eql(u8, buffer.items[1..], "8") or
+                        if (std.mem.eql(u8, buffer.items[1..], "8") or
                             std.mem.eql(u8, buffer.items[1..], "16") or
                             std.mem.eql(u8, buffer.items[1..], "32") or
                             std.mem.eql(u8, buffer.items[1..], "64") or
@@ -641,7 +638,9 @@ pub const Lexer = struct {
                         }
                     },
                     'v' => {
-                        if (std.mem.eql(u8, buffer.items[1..], "oid")) {
+                        if (std.mem.eql(u8, buffer.items[1..], "ariant")) {
+                            token.kind = TokenKind.VARIANT;
+                        } else if (std.mem.eql(u8, buffer.items[1..], "oid")) {
                             token.kind = TokenKind.BASIC_TYPE;
                             token.str = try self.allocator.dupe(u8, buffer.items);
                         }

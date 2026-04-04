@@ -143,6 +143,7 @@ pub fn TaggedUnionList(comptime T: type) type {
         }
 
         pub fn get(self: *Self, primitive_index: Index) T {
+            @setEvalBranchQuota(10000);
             const index = index_primitive_to_internal(primitive_index);
             switch (index.tag) {
                 inline else => |tag| {

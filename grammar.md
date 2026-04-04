@@ -44,8 +44,7 @@ assign_op = "=" | bin_arith_op "="
 capture = "|" [ ident | typed_var ] "|"
 
 struct_expr    = "struct" "{" [ typed_var "," ]* "}"
-enum_expr      = "enum"   "{" [ ident    "," ]* "}"
-union_expr     = "union" [ "(" [ "enum" | expr ] ")" ]? "{" [ typed_var "," ]* "}"
+variant_expr   = "variant" "{" [ ( typed_var | ident ) "," ]* "}"
 interface_expr = "interface"  "{" [ typed_var "," ]* "}"
 fn_expr        = "fn" "(" [ typed_var [ "," typed_var ]* ]? ")" "->" expr "{" stmt* "}"
 
@@ -69,8 +68,7 @@ expr = ident
      | expr "else" "do" "{" stmt* "}"
      | basic_type
      | struct_expr
-     | enum_expr
-     | union_expr
+     | variant_expr
      | interface_expr
      | fn_expr
 
