@@ -2,5 +2,5 @@
 zig-out/
 *.o
 
-third-party/build
-third-party/install
+third-party/*
+!third-party/build.zig

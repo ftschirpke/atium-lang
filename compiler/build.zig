@@ -3,7 +3,7 @@ const std = @import("std");
 
 const CompilerBuildError = error{MissingLibrary};
 
-pub fn build(
+pub fn build_subproject(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,

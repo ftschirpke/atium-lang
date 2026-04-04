@@ -1,0 +1,17 @@
+// SPDX-License-Identifier: MIT
+// RUN: %{compiler} lex %s 2>&1 | FileCheck %s
+let x = 123;
+let y = 456789;
+let greeting = "hello";
+let msg = "with spaces";
+let flag = true;
+let other = false;
+
+// CHECK:    2 > LET IDENTIFIER("x") ASSIGN NUMBER("123") SEMICOLON
+// CHECK:    3 > LET IDENTIFIER("y") ASSIGN NUMBER("456789") SEMICOLON
+// CHECK:    4 > LET IDENTIFIER("greeting") ASSIGN STRING_LITERAL("hello") SEMICOLON
+// CHECK:    5 > LET IDENTIFIER("msg") ASSIGN STRING_LITERAL("with spaces") SEMICOLON
+// CHECK:    6 > LET IDENTIFIER("flag") ASSIGN TRUE SEMICOLON
+// CHECK:    7 > LET IDENTIFIER("other") ASSIGN FALSE SEMICOLON
+// CHECK-NOT: ERROR
+// CHECK-NOT: WARNING

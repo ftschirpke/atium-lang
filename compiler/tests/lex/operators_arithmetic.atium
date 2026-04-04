@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: MIT
+// RUN: %{compiler} lex %s 2>&1 | FileCheck %s
++ ++;
+- ->;
+* **;
+/ | & ^;
+
+// CHECK:    2 > PLUS DOUBLE_PLUS SEMICOLON
+// CHECK:    3 > MINUS ARROW SEMICOLON
+// CHECK:    4 > ASTERISK DOUBLE_ASTERISK SEMICOLON
+// CHECK:    5 > SLASH PIPE AMPERSAND CARET SEMICOLON
+// CHECK-NOT: ERROR
+// CHECK-NOT: WARNING

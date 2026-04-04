@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: MIT
+// RUN: %{compiler} lex %s 2>&1 | FileCheck %s
+let a = foo;
+let b = _bar;
+let c = baz123;
+let d = letx;
+let e = structy;
+let f = truefoo;
+let g = fni;
+
+// CHECK:    2 > LET IDENTIFIER("a") ASSIGN IDENTIFIER("foo") SEMICOLON
+// CHECK:    3 > LET IDENTIFIER("b") ASSIGN IDENTIFIER("_bar") SEMICOLON
+// CHECK:    4 > LET IDENTIFIER("c") ASSIGN IDENTIFIER("baz123") SEMICOLON
+// CHECK:    5 > LET IDENTIFIER("d") ASSIGN IDENTIFIER("letx") SEMICOLON
+// CHECK:    6 > LET IDENTIFIER("e") ASSIGN IDENTIFIER("structy") SEMICOLON
+// CHECK:    7 > LET IDENTIFIER("f") ASSIGN IDENTIFIER("truefoo") SEMICOLON
+// CHECK:    8 > LET IDENTIFIER("g") ASSIGN IDENTIFIER("fni") SEMICOLON
+// CHECK-NOT: ERROR
+// CHECK-NOT: WARNING

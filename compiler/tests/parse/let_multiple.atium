@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: MIT
+// RUN: %{compiler} parse %s 2>&1 | FileCheck %s
+// NOTE: Fails until parse_let_statement (parse.zig:377) changes EQUAL -> ASSIGN
+let a = 1;
+let mut b = 2;
+let c: SomeType = a;
+let d = a + b;
+let flag = true;
+let msg = "done";
+
+// CHECK-NOT: ERROR
+// CHECK-NOT: WARNING

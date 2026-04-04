@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: MIT
+// RUN: %{compiler} parse %s 2>&1 | FileCheck %s
+// NOTE: Fails until parse_let_statement (parse.zig:377) changes EQUAL -> ASSIGN
+let n = 10;
+let base = 1;
+let is_base_case = n <= base;
+let prev = n - 1;
+let prev2 = n - 2;
+let result = prev + prev2;
+
+// CHECK-NOT: ERROR
+// CHECK-NOT: WARNING
