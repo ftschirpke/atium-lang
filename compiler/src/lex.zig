@@ -677,4 +677,26 @@ pub const Lexer = struct {
 
         return token;
     }
+
+    pub fn dump(token: *const Token, writer: *std.Io.Writer) void {
+        switch (token.kind) {
+            TokenKind.BASIC_TYPE,
+            TokenKind.IDENTIFIER,
+            TokenKind.INVALID,
+            TokenKind.NUMBER,
+            TokenKind.STRING_LITERAL,
+            => {
+                writer.print("{s}(\"{s}\") ", .{ @tagName(token.kind), token.str orelse return }) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+            },
+            else => {
+                writer.print("{s} ", .{@tagName(token.kind)}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+            },
+        }
+    }
 };

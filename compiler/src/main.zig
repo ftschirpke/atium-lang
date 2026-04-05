@@ -97,25 +97,7 @@ fn lex(allocator: std.mem.Allocator, writer: *std.Io.Writer, filepath: []const u
             };
             line += 1;
         }
-        switch (token.kind) {
-            TokenKind.BASIC_TYPE,
-            TokenKind.IDENTIFIER,
-            TokenKind.INVALID,
-            TokenKind.NUMBER,
-            TokenKind.STRING_LITERAL,
-            => {
-                writer.print("{s}(\"{s}\") ", .{ @tagName(token.kind), token.str orelse return }) catch |err| {
-                    lib.errmsg.error_writer(err);
-                    return;
-                };
-            },
-            else => {
-                writer.print("{s} ", .{@tagName(token.kind)}) catch |err| {
-                    lib.errmsg.error_writer(err);
-                    return;
-                };
-            },
-        }
+        lib.lex.Lexer.dump(&token, writer);
         opt_token = lexer.next_token() catch |err| {
             std.log.err("Unexpected problem while lexing next token - {}", .{err});
             return;
