@@ -1,0 +1,36 @@
+// SPDX-License-Identifier: MIT
+// RUN: %{compiler} parse %s 2>&1 | FileCheck %s
+
+let x = 10;
+let y = 0;
+
+let main = fn () -> void {
+    if x > 5 {
+        let z = x * 2;
+        y = z;
+    }
+    while y > 0 {
+        y = y - 1;
+    }
+    for i in 0..y {
+        let tmp = i;
+    }
+};
+
+// CHECK: %0 : let x = 10
+// CHECK: %1 : let y = 0
+// CHECK: %2 : let main = %3
+// CHECK: %3 : fn () bool { %4 }
+// CHECK: %4 : %5; %6; %7;
+// CHECK: %5 : if %8 { %9 }
+// CHECK: %8 : x > 5
+// CHECK: %9 : %10; %11;
+// CHECK: %10 : let z = %12
+// CHECK: %12 : x * 2
+// CHECK: %11 : y = z
+// CHECK: %6 : while %13 { %14; }
+// CHECK: %13 : y > 0
+// CHECK: %7 : for i in %15 { %16; }
+// CHECK: %15 : 0 .. y
+// CHECK-NOT: ERROR
+// CHECK-NOT: WARNING

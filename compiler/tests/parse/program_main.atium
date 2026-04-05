@@ -2,13 +2,33 @@
 // RUN: %{compiler} parse %s 2>&1 | FileCheck %s
 
 let input = 42;
-let limit = input - 1;
-let is_large = input > 10;
-let scaled = input * 2;
-let message = "computing";
-let mut accumulator = 0;
-let flags = is_large and accumulator == 0;
-let bits = scaled & 255;
 
+let main = fn () -> void {
+    let limit = input - 1;
+    let is_large = input > 10;
+    let scaled = input * 2;
+    let message = "computing";
+    let mut accumulator = 0;
+    let flags = is_large and accumulator == 0;
+    let bits = scaled & 255;
+};
+
+// CHECK: %0 : let input = 42
+// CHECK: %1 : let main = %2
+// CHECK: %2 : fn () bool { %3 }
+// CHECK: %3 : %4; %5; %6; %7; %8; %9; %10;
+// CHECK: %4 : let limit = %11
+// CHECK: %11 : input - 1
+// CHECK: %5 : let is_large = %12
+// CHECK: %12 : input > 10
+// CHECK: %6 : let scaled = %13
+// CHECK: %13 : input * 2
+// CHECK: %7 : let message = "computing"
+// CHECK: %8 : let mut accumulator = 0
+// CHECK: %9 : let flags = %14
+// CHECK: %14 : is_large and %15
+// CHECK: %15 : accumulator == 0
+// CHECK: %10 : let bits = %16
+// CHECK: %16 : scaled & 255
 // CHECK-NOT: ERROR
 // CHECK-NOT: WARNING

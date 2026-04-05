@@ -8,19 +8,19 @@ const id = @import("id.zig");
 
 const SourceFile = @import("world.zig").SourceFile;
 
-const AstItemList = collections.TaggedUnionList(AstItem);
+pub const AstItemList = collections.TaggedUnionList(AstItem);
 
-const AstIndex = struct {
+pub const AstIndex = struct {
     source_index: usize,
     item_index: id.IdType,
 };
 
-const LabeledExpr = struct {
+pub const LabeledExpr = struct {
     label: []const u8,
     type_expr: AstIndex,
 };
 
-const AstItem = union(enum) {
+pub const AstItem = union(enum) {
     boolean_literal: bool,
     integer_literal: u64,
     string_literal: []const u8,
@@ -81,7 +81,7 @@ const AstItem = union(enum) {
         field_name: AstIndex,
     },
     basic_type: enum {
-        Bool,
+        BOOL,
         I8,
         I16,
         I32,
@@ -154,7 +154,7 @@ const AstItem = union(enum) {
         else_body: ?AstIndex,
     },
     for_statement: struct {
-        loop_var: []const u8,
+        loop_var: AstIndex,
         iter_expr: AstIndex,
         body: AstIndex,
     },
@@ -193,7 +193,7 @@ const Ast = struct {
     allocator: std.mem.Allocator,
     item_list: AstItemList,
     sources: std.ArrayList(AstItemSource),
-    top_level: std.ArrayList(Index),
+    top_level: std.ArrayList(AstIndex),
 
     const Self = @This();
     const Index = AstIndex;
@@ -544,7 +544,7 @@ pub const Parser = struct {
             );
             return Error.InvalidToken;
         }
-        const loop_var_token = try self.consume_token();
+        const loop_var_expr = try self.parse_nonoperator_expression();
         if (!self.check_next(lex.TokenKind.IN)) {
             print_token_error(
                 .Error,
@@ -561,7 +561,7 @@ pub const Parser = struct {
         const body = try self.parse_block();
         return self.ast.append(
             AstItem{ .for_statement = .{
-                .loop_var = loop_var_token.str.?,
+                .loop_var = loop_var_expr,
                 .iter_expr = iter_expr,
                 .body = body,
             } },
@@ -1074,6 +1074,40 @@ pub const Parser = struct {
                 expr = AstItem{ .identifier = token.str.? };
                 source = AstItemSource.from_token(try self.consume_token());
             },
+            lex.TokenKind.BASIC_TYPE => {
+                const str = token.str.?;
+                expr = AstItem{ .basic_type = .BOOL };
+                if (std.mem.eql(u8, str, "bool")) {
+                    expr.basic_type = .BOOL;
+                } else if (std.mem.eql(u8, str, "i8")) {
+                    expr.basic_type = .I8;
+                } else if (std.mem.eql(u8, str, "i16")) {
+                    expr.basic_type = .I16;
+                } else if (std.mem.eql(u8, str, "i32")) {
+                    expr.basic_type = .I32;
+                } else if (std.mem.eql(u8, str, "i64")) {
+                    expr.basic_type = .I64;
+                } else if (std.mem.eql(u8, str, "i128")) {
+                    expr.basic_type = .I128;
+                } else if (std.mem.eql(u8, str, "isize")) {
+                    expr.basic_type = .ISIZE;
+                } else if (std.mem.eql(u8, str, "u8")) {
+                    expr.basic_type = .U8;
+                } else if (std.mem.eql(u8, str, "u16")) {
+                    expr.basic_type = .U16;
+                } else if (std.mem.eql(u8, str, "u32")) {
+                    expr.basic_type = .U32;
+                } else if (std.mem.eql(u8, str, "u64")) {
+                    expr.basic_type = .U64;
+                } else if (std.mem.eql(u8, str, "u128")) {
+                    expr.basic_type = .U128;
+                } else if (std.mem.eql(u8, str, "usize")) {
+                    expr.basic_type = .USIZE;
+                } else if (std.mem.eql(u8, str, "self")) {
+                    expr.basic_type = .SELF;
+                }
+                source = AstItemSource.from_token(try self.consume_token());
+            },
             lex.TokenKind.LPAREN => {
                 _ = try self.consume_token();
                 const inner = try self.parse_expression();
@@ -1308,3 +1342,691 @@ pub fn print_token_error(
         hint_args,
     );
 }
+
+pub fn dump(parser: *Parser, writer: *std.Io.Writer) void {
+    var dumper = Dumper.init(&parser.ast, writer);
+    for (parser.ast.top_level.items) |item_index| {
+        const num = dumper.get_num();
+        dumper.dump_item(item_index, num);
+    }
+    writer.print("\n", .{}) catch |err| {
+        errmsg.error_writer(err);
+        return;
+    };
+}
+
+const Dumper = struct {
+    allocator: std.mem.Allocator,
+    ast: *Ast,
+    writer: *std.Io.Writer,
+    next_num: usize,
+
+    const Self = @This();
+
+    fn init(ast: *Ast, writer: *std.Io.Writer) Self {
+        return Self{
+            .allocator = ast.allocator,
+            .ast = ast,
+            .writer = writer,
+            .next_num = 0,
+        };
+    }
+
+    fn get_num(self: *Self) usize {
+        const num = self.next_num;
+        self.next_num += 1;
+        return num;
+    }
+
+    fn quick_dump_item(self: *Self, index: AstIndex) ?usize {
+        const item = self.ast.item_list.get(index.item_index);
+        switch (item) {
+            .boolean_literal => |value| {
+                self.writer.print("{}", .{value}) catch |err| {
+                    errmsg.error_writer(err);
+                    return null;
+                };
+                return null;
+            },
+            .integer_literal => |value| {
+                self.writer.print("{}", .{value}) catch |err| {
+                    errmsg.error_writer(err);
+                    return null;
+                };
+                return null;
+            },
+            .string_literal => |value| {
+                self.writer.print("\"{s}\"", .{value}) catch |err| {
+                    errmsg.error_writer(err);
+                    return null;
+                };
+                return null;
+            },
+            .identifier => |value| {
+                self.writer.print("{s}", .{value}) catch |err| {
+                    errmsg.error_writer(err);
+                    return null;
+                };
+                return null;
+            },
+            .basic_type => |value| {
+                const name: []const u8 = switch (value) {
+                    .BOOL => "bool",
+                    .I8 => "i8",
+                    .I16 => "i16",
+                    .I32 => "i32",
+                    .I64 => "i64",
+                    .I128 => "i128",
+                    .ISIZE => "isize",
+                    .U8 => "u8",
+                    .U16 => "u16",
+                    .U32 => "u32",
+                    .U64 => "u64",
+                    .U128 => "u128",
+                    .USIZE => "usize",
+                    .SELF => "Self",
+                };
+                self.writer.print("{s}", .{name}) catch |err| {
+                    errmsg.error_writer(err);
+                    return null;
+                };
+                return null;
+            },
+            .loop_control => |value| {
+                const name: []const u8 = switch (value) {
+                    .BREAK => "break",
+                    .CONTINUE => "continue",
+                };
+                self.writer.print("{s}", .{name}) catch |err| {
+                    errmsg.error_writer(err);
+                    return null;
+                };
+                return null;
+            },
+            .block => |value| {
+                if (value.stmts.items.len == 0) {
+                    self.writer.print("_", .{}) catch |err| {
+                        errmsg.error_writer(err);
+                        return null;
+                    };
+                    return null;
+                } else if (value.stmts.items.len == 1) {
+                    const rv = self.quick_dump_item(value.stmts.items[0]);
+                    self.writer.print(";", .{}) catch |err| {
+                        errmsg.error_writer(err);
+                        return null;
+                    };
+                    return rv;
+                }
+            },
+            .return_statement => |value| {
+                self.writer.print("return", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return null;
+                };
+                var value_ref: ?usize = null;
+                if (value.value) |ret_val| {
+                    self.writer.print(" ", .{}) catch |err| {
+                        errmsg.error_writer(err);
+                        return null;
+                    };
+                    value_ref = self.quick_dump_item(ret_val);
+                }
+                return value_ref;
+            },
+            else => {},
+        }
+        const num = self.get_num();
+        self.writer.print("%{}", .{num}) catch |err| {
+            errmsg.error_writer(err);
+            return num;
+        };
+        return num;
+    }
+
+    fn dump_item(self: *Self, index: AstIndex, num: usize) void {
+        const item = self.ast.item_list.get(index.item_index);
+        self.writer.print("\n%{} : ", .{num}) catch |err| {
+            errmsg.error_writer(err);
+            return;
+        };
+        switch (item) {
+            .unary_expression => |value| {
+                const op = switch (value.operator) {
+                    .NOT => "not",
+                    .MINUS => "-",
+                    .BIT_INVERSE => "~",
+                };
+                self.writer.print("{s} ", .{op}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const ref = self.quick_dump_item(value.inner_expr);
+                if (ref) |ref_num| {
+                    self.dump_item(value.inner_expr, ref_num);
+                }
+            },
+            .binary_expression => |value| {
+                const op = switch (value.operator) {
+                    .EQUAL => "==",
+                    .NOT_EQUAL => "!=",
+                    .GREATER => ">",
+                    .LESS => "<",
+                    .GREATER_EQUAL => ">=",
+                    .LESS_EQUAL => "<=",
+                    .ADD => "+",
+                    .SUBTRACT => "-",
+                    .MULTIPLY => "*",
+                    .DIVIDE => "/",
+                    .BITSHIFT_LEFT => "<<",
+                    .BITSHIFT_RIGHT => ">>",
+                    .BIT_AND => "&",
+                    .BIT_OR => "|",
+                    .BIT_XOR => "^",
+                    .ARRAY_ADD => "++",
+                    .ARRAY_MULTIPLY => "**",
+                    .AND => "and",
+                    .OR => "or",
+                    .RANGE => "..",
+                };
+                const left_ref = self.quick_dump_item(value.left_expr);
+                self.writer.print(" {s} ", .{op}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const right_ref = self.quick_dump_item(value.right_expr);
+                if (left_ref) |left_num| {
+                    self.dump_item(value.left_expr, left_num);
+                }
+                if (right_ref) |right_num| {
+                    self.dump_item(value.right_expr, right_num);
+                }
+            },
+            .assign => |value| {
+                const op = switch (value.operation) {
+                    .NONE => "",
+                    .ADD => "+",
+                    .SUBTRACT => "-",
+                    .MULTIPLY => "*",
+                    .DIVIDE => "/",
+                    .BITSHIFT_LEFT => "<<",
+                    .BITSHIFT_RIGHT => ">>",
+                    .BIT_AND => "&",
+                    .BIT_OR => "|",
+                    .BIT_XOR => "^",
+                    .ARRAY_ADD => "++",
+                    .ARRAY_MULTIPLY => "**",
+                    .AND => "and",
+                    .OR => "or",
+                };
+                const left_ref = self.quick_dump_item(value.left_expr);
+                self.writer.print(" {s}= ", .{op}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const right_ref = self.quick_dump_item(value.right_expr);
+                if (left_ref) |left_num| {
+                    self.dump_item(value.left_expr, left_num);
+                }
+                if (right_ref) |right_num| {
+                    self.dump_item(value.right_expr, right_num);
+                }
+            },
+            .array_access => |value| {
+                const outer_ref = self.quick_dump_item(value.outer_expr);
+                self.writer.print(" [ ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const bracket_ref = self.quick_dump_item(value.bracket_expr);
+                self.writer.print(" ]", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                if (outer_ref) |outer_num| {
+                    self.dump_item(value.outer_expr, outer_num);
+                }
+                if (bracket_ref) |bracket_num| {
+                    self.dump_item(value.bracket_expr, bracket_num);
+                }
+            },
+            .primitive_access => |value| {
+                const suffix = switch (value.access_type) {
+                    .DEREFERENCE => ".*",
+                    .ADDRESS => ".&",
+                    .UNWRAP_CHECKED => ".?",
+                    .UNWRAP_UNCHECKED => ".!",
+                };
+                const outer_ref = self.quick_dump_item(value.outer_expr);
+                self.writer.print("{s}", .{suffix}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                if (outer_ref) |outer_num| {
+                    self.dump_item(value.outer_expr, outer_num);
+                }
+            },
+            .field_access => |value| {
+                const outer_ref = self.quick_dump_item(value.outer_expr);
+                self.writer.print(".", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const field_ref = self.quick_dump_item(value.field_name);
+                if (outer_ref) |outer_num| {
+                    self.dump_item(value.outer_expr, outer_num);
+                }
+                if (field_ref) |field_num| {
+                    self.dump_item(value.field_name, field_num);
+                }
+            },
+            .function_type => |value| {
+                const input_ref = self.quick_dump_item(value.input_type_expr);
+                self.writer.print(" -> ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const output_ref = self.quick_dump_item(value.output_type_expr);
+                if (input_ref) |input_num| {
+                    self.dump_item(value.input_type_expr, input_num);
+                }
+                if (output_ref) |output_num| {
+                    self.dump_item(value.output_type_expr, output_num);
+                }
+            },
+            .function_call => |value| {
+                const func_ref = self.quick_dump_item(value.function_expr);
+                self.writer.print(" ( ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                var ref_list = std.ArrayList(?usize).initCapacity(
+                    self.allocator,
+                    value.args_expr.items.len,
+                ) catch |err| {
+                    errmsg.error_oom(err);
+                    return;
+                };
+                defer ref_list.deinit(self.allocator);
+
+                for (0..value.args_expr.items.len) |i| {
+                    if (i > 0) self.writer.print(", ", .{}) catch |err| {
+                        errmsg.error_writer(err);
+                        return;
+                    };
+                    const ref = self.quick_dump_item(value.args_expr.items[i]);
+                    ref_list.append(self.allocator, ref) catch |err| {
+                        errmsg.error_oom(err);
+                        return;
+                    };
+                }
+                self.writer.print(" )", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                if (func_ref) |func_num| {
+                    self.dump_item(value.function_expr, func_num);
+                }
+                for (0..ref_list.items.len) |i| {
+                    const ref = ref_list.items[i];
+                    if (ref) |ref_num| {
+                        self.dump_item(value.args_expr.items[i], ref_num);
+                    }
+                }
+            },
+            .struct_type => |value| {
+                self.writer.print("struct {{ ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                var ref_list = std.ArrayList(?usize).initCapacity(
+                    self.allocator,
+                    value.members.items.len,
+                ) catch |err| {
+                    errmsg.error_oom(err);
+                    return;
+                };
+                defer ref_list.deinit(self.allocator);
+
+                for (0..value.members.items.len) |i| {
+                    if (i > 0) self.writer.print(", ", .{}) catch |err| {
+                        errmsg.error_writer(err);
+                        return;
+                    };
+                    self.writer.print("{s} ", .{value.members.items[i].label}) catch |err| {
+                        errmsg.error_writer(err);
+                        return;
+                    };
+                    const ref = self.quick_dump_item(value.members.items[i].type_expr);
+                    ref_list.append(self.allocator, ref) catch |err| {
+                        errmsg.error_oom(err);
+                        return;
+                    };
+                }
+                self.writer.print(" }}", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                for (0..ref_list.items.len) |i| {
+                    const ref = ref_list.items[i];
+                    if (ref) |ref_num| {
+                        self.dump_item(value.members.items[i].type_expr, ref_num);
+                    }
+                }
+            },
+            .variant_type => |value| {
+                self.writer.print("variant {{ ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                var ref_list = std.ArrayList(?usize).initCapacity(
+                    self.allocator,
+                    value.members.items.len,
+                ) catch |err| {
+                    errmsg.error_oom(err);
+                    return;
+                };
+                defer ref_list.deinit(self.allocator);
+
+                for (0..value.members.items.len) |i| {
+                    if (i > 0) self.writer.print(", ", .{}) catch |err| {
+                        errmsg.error_writer(err);
+                        return;
+                    };
+                    self.writer.print("{s} ", .{value.members.items[i].label}) catch |err| {
+                        errmsg.error_writer(err);
+                        return;
+                    };
+                    const ref = self.quick_dump_item(value.members.items[i].type_expr);
+                    ref_list.append(self.allocator, ref) catch |err| {
+                        errmsg.error_oom(err);
+                        return;
+                    };
+                }
+                self.writer.print(" }}", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                for (0..ref_list.items.len) |i| {
+                    const ref = ref_list.items[i];
+                    if (ref) |ref_num| {
+                        self.dump_item(value.members.items[i].type_expr, ref_num);
+                    }
+                }
+            },
+            .interface => |value| {
+                self.writer.print("interface {{ ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                var ref_list = std.ArrayList(?usize).initCapacity(
+                    self.allocator,
+                    value.members.items.len,
+                ) catch |err| {
+                    errmsg.error_oom(err);
+                    return;
+                };
+                defer ref_list.deinit(self.allocator);
+
+                for (0..value.members.items.len) |i| {
+                    if (i > 0) self.writer.print(", ", .{}) catch |err| {
+                        errmsg.error_writer(err);
+                        return;
+                    };
+                    self.writer.print("{s} ", .{value.members.items[i].label}) catch |err| {
+                        errmsg.error_writer(err);
+                        return;
+                    };
+                    const ref = self.quick_dump_item(value.members.items[i].type_expr);
+                    ref_list.append(self.allocator, ref) catch |err| {
+                        errmsg.error_oom(err);
+                        return;
+                    };
+                }
+                self.writer.print(" }}", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                for (0..ref_list.items.len) |i| {
+                    const ref = ref_list.items[i];
+                    if (ref) |ref_num| {
+                        self.dump_item(value.members.items[i].type_expr, ref_num);
+                    }
+                }
+            },
+            .func_def => |value| {
+                self.writer.print("fn (", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                var ref_list = std.ArrayList(?usize).initCapacity(
+                    self.allocator,
+                    value.arguments.items.len,
+                ) catch |err| {
+                    errmsg.error_oom(err);
+                    return;
+                };
+                defer ref_list.deinit(self.allocator);
+
+                for (0..value.arguments.items.len) |i| {
+                    if (i > 0) self.writer.print(", ", .{}) catch |err| {
+                        errmsg.error_writer(err);
+                        return;
+                    };
+                    self.writer.print("{s} ", .{value.arguments.items[i].label}) catch |err| {
+                        errmsg.error_writer(err);
+                        return;
+                    };
+                    const ref = self.quick_dump_item(value.arguments.items[i].type_expr);
+                    ref_list.append(self.allocator, ref) catch |err| {
+                        errmsg.error_oom(err);
+                        return;
+                    };
+                }
+                self.writer.print(") ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const ret_ref = self.quick_dump_item(value.return_type_expr);
+                self.writer.print(" {{ ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const body_ref = self.quick_dump_item(value.body);
+                self.writer.print(" }}", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+
+                for (0..ref_list.items.len) |i| {
+                    const ref = ref_list.items[i];
+                    if (ref) |ref_num| {
+                        self.dump_item(value.arguments.items[i].type_expr, ref_num);
+                    }
+                }
+                if (ret_ref) |ret_num| {
+                    self.dump_item(value.return_type_expr, ret_num);
+                }
+                if (body_ref) |body_num| {
+                    self.dump_item(value.body, body_num);
+                }
+            },
+            .type_func_def => |value| {
+                self.writer.print("let ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const type_name_ref = self.quick_dump_item(value.type_name);
+                self.writer.print(".", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const name_ref = self.quick_dump_item(value.name);
+                self.writer.print(" = ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const func_def_ref = self.quick_dump_item(value.func_def);
+                if (type_name_ref) |type_name_num| {
+                    self.dump_item(value.type_name, type_name_num);
+                }
+                if (name_ref) |name_num| {
+                    self.dump_item(value.name, name_num);
+                }
+                if (func_def_ref) |func_def_num| {
+                    self.dump_item(value.func_def, func_def_num);
+                }
+            },
+            .var_def => |value| {
+                const mut_str: []const u8 = if (value.mut) "mut " else "";
+                self.writer.print("let {s}", .{mut_str}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const name_ref = self.quick_dump_item(value.name);
+                var type_ref: ?usize = null;
+                if (value.type_expr) |type_expr| {
+                    self.writer.print(" : ", .{}) catch |err| {
+                        errmsg.error_writer(err);
+                        return;
+                    };
+                    type_ref = self.quick_dump_item(type_expr);
+                }
+                self.writer.print(" = ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const value_ref = self.quick_dump_item(value.value);
+                if (name_ref) |name_num| {
+                    self.dump_item(value.name, name_num);
+                }
+                if (type_ref) |type_num| {
+                    self.dump_item(value.type_expr.?, type_num);
+                }
+                if (value_ref) |value_num| {
+                    self.dump_item(value.value, value_num);
+                }
+            },
+            .block => |value| {
+                if (value.stmts.items.len == 1) {
+                    return;
+                }
+                var ref_list = std.ArrayList(?usize).initCapacity(
+                    self.allocator,
+                    value.stmts.items.len,
+                ) catch |err| {
+                    errmsg.error_oom(err);
+                    return;
+                };
+                defer ref_list.deinit(self.allocator);
+
+                for (0..value.stmts.items.len) |i| {
+                    const ref = self.quick_dump_item(value.stmts.items[i]);
+                    ref_list.append(self.allocator, ref) catch |err| {
+                        errmsg.error_oom(err);
+                        return;
+                    };
+                    self.writer.print("; ", .{}) catch |err| {
+                        errmsg.error_writer(err);
+                        return;
+                    };
+                }
+                for (0..ref_list.items.len) |i| {
+                    const ref = ref_list.items[i];
+                    if (ref) |ref_num| {
+                        self.dump_item(value.stmts.items[i], ref_num);
+                    }
+                }
+            },
+            .if_statement => |value| {
+                self.writer.print("if ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const cond_ref = self.quick_dump_item(value.condition);
+                self.writer.print(" {{ ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const then_ref = self.quick_dump_item(value.then_body);
+                var else_ref: ?usize = null;
+                if (value.else_body) |else_body| {
+                    self.writer.print(" }} else {{ ", .{}) catch |err| {
+                        errmsg.error_writer(err);
+                        return;
+                    };
+                    else_ref = self.quick_dump_item(else_body);
+                }
+                self.writer.print(" }}", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                if (cond_ref) |condition_num| {
+                    self.dump_item(value.condition, condition_num);
+                }
+                if (then_ref) |then_num| {
+                    self.dump_item(value.then_body, then_num);
+                }
+                if (else_ref) |else_num| {
+                    self.dump_item(value.else_body.?, else_num);
+                }
+            },
+            .for_statement => |value| {
+                self.writer.print("for ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const loop_var_ref = self.quick_dump_item(value.loop_var);
+                self.writer.print(" in ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const iter_ref = self.quick_dump_item(value.iter_expr);
+                self.writer.print(" {{ ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const body_ref = self.quick_dump_item(value.body);
+                self.writer.print(" }}", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                if (loop_var_ref) |loop_var_num| {
+                    self.dump_item(value.loop_var, loop_var_num);
+                }
+                if (iter_ref) |iter_num| {
+                    self.dump_item(value.iter_expr, iter_num);
+                }
+                if (body_ref) |body_num| {
+                    self.dump_item(value.body, body_num);
+                }
+            },
+            .while_statement => |value| {
+                self.writer.print("while ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const cond_ref = self.quick_dump_item(value.condition);
+                self.writer.print(" {{ ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const body_ref = self.quick_dump_item(value.body);
+                self.writer.print(" }}", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                if (cond_ref) |condition_num| {
+                    self.dump_item(value.condition, condition_num);
+                }
+                if (body_ref) |body_num| {
+                    self.dump_item(value.body, body_num);
+                }
+            },
+            .return_statement => |value| {
+                self.dump_item(value.value.?, num);
+            },
+            else => return,
+        }
+    }
+};

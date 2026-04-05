@@ -6,5 +6,13 @@ let ne = x != y;
 let lt = p < q;
 let ge = m >= n;
 
+// CHECK: %0 : let eq = %1
+// CHECK: %1 : a == b
+// CHECK: %2 : let ne = %3
+// CHECK: %3 : x != y
+// CHECK: %4 : let lt = %5
+// CHECK: %5 : p < q
+// CHECK: %6 : let ge = %7
+// CHECK: %7 : m >= n
 // CHECK-NOT: ERROR
 // CHECK-NOT: WARNING

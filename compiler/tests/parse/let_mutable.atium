@@ -3,5 +3,6 @@
 
 let mut counter = 0;
 
+// CHECK: %0 : let mut counter = 0
 // CHECK-NOT: ERROR
 // CHECK-NOT: WARNING

@@ -3,5 +3,6 @@
 
 let x = 42;
 
+// CHECK: %0 : let x = 42
 // CHECK-NOT: ERROR
 // CHECK-NOT: WARNING

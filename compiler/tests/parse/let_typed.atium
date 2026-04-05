@@ -3,5 +3,6 @@
 
 let n: SomeType = 42;
 
+// CHECK: %0 : let n : SomeType = 42
 // CHECK-NOT: ERROR
 // CHECK-NOT: WARNING
