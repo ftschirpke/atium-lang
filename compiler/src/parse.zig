@@ -81,7 +81,7 @@ pub const AstItem = union(enum) {
         field_name: AstIndex,
     },
     basic_type: enum {
-        Bool,
+        BOOL,
         I8,
         I16,
         I32,
@@ -1074,6 +1074,40 @@ pub const Parser = struct {
                 expr = AstItem{ .identifier = token.str.? };
                 source = AstItemSource.from_token(try self.consume_token());
             },
+            lex.TokenKind.BASIC_TYPE => {
+                const str = token.str.?;
+                expr = AstItem{ .basic_type = .BOOL };
+                if (std.mem.eql(u8, str, "bool")) {
+                    expr.basic_type = .BOOL;
+                } else if (std.mem.eql(u8, str, "i8")) {
+                    expr.basic_type = .I8;
+                } else if (std.mem.eql(u8, str, "i16")) {
+                    expr.basic_type = .I16;
+                } else if (std.mem.eql(u8, str, "i32")) {
+                    expr.basic_type = .I32;
+                } else if (std.mem.eql(u8, str, "i64")) {
+                    expr.basic_type = .I64;
+                } else if (std.mem.eql(u8, str, "i128")) {
+                    expr.basic_type = .I128;
+                } else if (std.mem.eql(u8, str, "isize")) {
+                    expr.basic_type = .ISIZE;
+                } else if (std.mem.eql(u8, str, "u8")) {
+                    expr.basic_type = .U8;
+                } else if (std.mem.eql(u8, str, "u16")) {
+                    expr.basic_type = .U16;
+                } else if (std.mem.eql(u8, str, "u32")) {
+                    expr.basic_type = .U32;
+                } else if (std.mem.eql(u8, str, "u64")) {
+                    expr.basic_type = .U64;
+                } else if (std.mem.eql(u8, str, "u128")) {
+                    expr.basic_type = .U128;
+                } else if (std.mem.eql(u8, str, "usize")) {
+                    expr.basic_type = .USIZE;
+                } else if (std.mem.eql(u8, str, "self")) {
+                    expr.basic_type = .SELF;
+                }
+                source = AstItemSource.from_token(try self.consume_token());
+            },
             lex.TokenKind.LPAREN => {
                 _ = try self.consume_token();
                 const inner = try self.parse_expression();
@@ -1315,6 +1349,10 @@ pub fn dump(parser: *Parser, writer: *std.Io.Writer) void {
         const num = dumper.get_num();
         dumper.dump_item(item_index, num);
     }
+    writer.print("\n", .{}) catch |err| {
+        errmsg.error_writer(err);
+        return;
+    };
 }
 
 const Dumper = struct {
@@ -1343,25 +1381,37 @@ const Dumper = struct {
     fn quick_dump_item(self: *Self, index: AstIndex) ?usize {
         const item = self.ast.item_list.get(index.item_index);
         switch (item) {
-            .boolean_literal => |value| self.writer.print("{}", .{value}) catch |err| {
-                errmsg.error_writer(err);
+            .boolean_literal => |value| {
+                self.writer.print("{}", .{value}) catch |err| {
+                    errmsg.error_writer(err);
+                    return null;
+                };
                 return null;
             },
-            .integer_literal => |value| self.writer.print("{}", .{value}) catch |err| {
-                errmsg.error_writer(err);
+            .integer_literal => |value| {
+                self.writer.print("{}", .{value}) catch |err| {
+                    errmsg.error_writer(err);
+                    return null;
+                };
                 return null;
             },
-            .string_literal => |value| self.writer.print("\"{s}\"", .{value}) catch |err| {
-                errmsg.error_writer(err);
+            .string_literal => |value| {
+                self.writer.print("\"{s}\"", .{value}) catch |err| {
+                    errmsg.error_writer(err);
+                    return null;
+                };
                 return null;
             },
-            .identifier => |value| self.writer.print("{s}", .{value}) catch |err| {
-                errmsg.error_writer(err);
+            .identifier => |value| {
+                self.writer.print("{s}", .{value}) catch |err| {
+                    errmsg.error_writer(err);
+                    return null;
+                };
                 return null;
             },
             .basic_type => |value| {
                 const name: []const u8 = switch (value) {
-                    .Bool => "bool",
+                    .BOOL => "bool",
                     .I8 => "i8",
                     .I16 => "i16",
                     .I32 => "i32",
@@ -1380,6 +1430,7 @@ const Dumper = struct {
                     errmsg.error_writer(err);
                     return null;
                 };
+                return null;
             },
             .loop_control => |value| {
                 const name: []const u8 = switch (value) {
@@ -1390,35 +1441,55 @@ const Dumper = struct {
                     errmsg.error_writer(err);
                     return null;
                 };
+                return null;
             },
-            else => {
-                const num = self.get_num();
-                self.writer.print("%{}", .{num}) catch |err| {
+            .block => |value| {
+                if (value.stmts.items.len == 0) {
+                    self.writer.print("_", .{}) catch |err| {
+                        errmsg.error_writer(err);
+                        return null;
+                    };
+                    return null;
+                } else if (value.stmts.items.len == 1) {
+                    const rv = self.quick_dump_item(value.stmts.items[0]);
+                    self.writer.print(";", .{}) catch |err| {
+                        errmsg.error_writer(err);
+                        return null;
+                    };
+                    return rv;
+                }
+            },
+            .return_statement => |value| {
+                self.writer.print("return", .{}) catch |err| {
                     errmsg.error_writer(err);
-                    return num;
+                    return null;
                 };
-                return num;
+                var value_ref: ?usize = null;
+                if (value.value) |ret_val| {
+                    self.writer.print(" ", .{}) catch |err| {
+                        errmsg.error_writer(err);
+                        return null;
+                    };
+                    value_ref = self.quick_dump_item(ret_val);
+                }
+                return value_ref;
             },
+            else => {},
         }
-        return null;
+        const num = self.get_num();
+        self.writer.print("%{}", .{num}) catch |err| {
+            errmsg.error_writer(err);
+            return num;
+        };
+        return num;
     }
 
     fn dump_item(self: *Self, index: AstIndex, num: usize) void {
         const item = self.ast.item_list.get(index.item_index);
-        switch (item) {
-            .type_func_def, .var_def => {
-                self.writer.print("\n", .{}) catch |err| {
-                    errmsg.error_writer(err);
-                    return;
-                };
-            },
-            else => {
-                self.writer.print("\n    %{} = ", .{num}) catch |err| {
-                    errmsg.error_writer(err);
-                    return;
-                };
-            },
-        }
+        self.writer.print("\n%{} : ", .{num}) catch |err| {
+            errmsg.error_writer(err);
+            return;
+        };
         switch (item) {
             .unary_expression => |value| {
                 const op = switch (value.operator) {
@@ -1724,7 +1795,7 @@ const Dumper = struct {
                 }
             },
             .func_def => |value| {
-                self.writer.print("fn ( ", .{}) catch |err| {
+                self.writer.print("fn (", .{}) catch |err| {
                     errmsg.error_writer(err);
                     return;
                 };
@@ -1752,7 +1823,7 @@ const Dumper = struct {
                         return;
                     };
                 }
-                self.writer.print(" ) ", .{}) catch |err| {
+                self.writer.print(") ", .{}) catch |err| {
                     errmsg.error_writer(err);
                     return;
                 };
@@ -1762,6 +1833,10 @@ const Dumper = struct {
                     return;
                 };
                 const body_ref = self.quick_dump_item(value.body);
+                self.writer.print(" }}", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
 
                 for (0..ref_list.items.len) |i| {
                     const ref = ref_list.items[i];
@@ -1833,6 +1908,9 @@ const Dumper = struct {
                 }
             },
             .block => |value| {
+                if (value.stmts.items.len == 1) {
+                    return;
+                }
                 var ref_list = std.ArrayList(?usize).initCapacity(
                     self.allocator,
                     value.stmts.items.len,
@@ -1848,7 +1926,7 @@ const Dumper = struct {
                         errmsg.error_oom(err);
                         return;
                     };
-                    self.writer.print(" ; ", .{}) catch |err| {
+                    self.writer.print("; ", .{}) catch |err| {
                         errmsg.error_writer(err);
                         return;
                     };
@@ -1909,7 +1987,7 @@ const Dumper = struct {
                     return;
                 };
                 const body_ref = self.quick_dump_item(value.body);
-                self.writer.print("}}", .{}) catch |err| {
+                self.writer.print(" }}", .{}) catch |err| {
                     errmsg.error_writer(err);
                     return;
                 };
@@ -1946,21 +2024,7 @@ const Dumper = struct {
                 }
             },
             .return_statement => |value| {
-                self.writer.print("return", .{}) catch |err| {
-                    errmsg.error_writer(err);
-                    return;
-                };
-                var value_ref: ?usize = null;
-                if (value.value) |ret_val| {
-                    self.writer.print(" ", .{}) catch |err| {
-                        errmsg.error_writer(err);
-                        return;
-                    };
-                    value_ref = self.quick_dump_item(ret_val);
-                }
-                if (value_ref) |value_num| {
-                    self.dump_item(value.value.?, value_num);
-                }
+                self.dump_item(value.value.?, num);
             },
             else => return,
         }
