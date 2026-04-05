@@ -7,5 +7,15 @@ let xored = p ^ q;
 let shifted_left = n << 2;
 let shifted_right = m >> 1;
 
+// CHECK: %0 : let anded = %1
+// CHECK: %1 : a & b
+// CHECK: %2 : let ored = %3
+// CHECK: %3 : x | y
+// CHECK: %4 : let xored = %5
+// CHECK: %5 : p ^ q
+// CHECK: %6 : let shifted_left = %7
+// CHECK: %7 : n << 2
+// CHECK: %8 : let shifted_right = %9
+// CHECK: %9 : m >> 1
 // CHECK-NOT: ERROR
 // CHECK-NOT: WARNING

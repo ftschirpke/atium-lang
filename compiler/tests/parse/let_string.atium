@@ -3,5 +3,6 @@
 
 let greeting = "hello world";
 
+// CHECK: %0 : let greeting = "hello world"
 // CHECK-NOT: ERROR
 // CHECK-NOT: WARNING

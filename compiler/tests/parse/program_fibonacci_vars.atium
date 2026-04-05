@@ -3,10 +3,26 @@
 
 let n = 10;
 let base = 1;
-let is_base_case = n <= base;
-let prev = n - 1;
-let prev2 = n - 2;
-let result = prev + prev2;
 
+let main = fn () -> void {
+    let is_base_case = n <= base;
+    let prev = n - 1;
+    let prev2 = n - 2;
+    let result = prev + prev2;
+};
+
+// CHECK: %0 : let n = 10
+// CHECK: %1 : let base = 1
+// CHECK: %2 : let main = %3
+// CHECK: %3 : fn () bool { %4 }
+// CHECK: %4 : %5; %6; %7; %8;
+// CHECK: %5 : let is_base_case = %9
+// CHECK: %9 : n <= base
+// CHECK: %6 : let prev = %10
+// CHECK: %10 : n - 1
+// CHECK: %7 : let prev2 = %11
+// CHECK: %11 : n - 2
+// CHECK: %8 : let result = %12
+// CHECK: %12 : prev + prev2
 // CHECK-NOT: ERROR
 // CHECK-NOT: WARNING

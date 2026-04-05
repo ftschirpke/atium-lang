@@ -5,5 +5,12 @@ let both = a and b;
 let either = x or y;
 let combined = a and b or c;
 
+// CHECK: %0 : let both = %1
+// CHECK: %1 : a and b
+// CHECK: %2 : let either = %3
+// CHECK: %3 : x or y
+// CHECK: %4 : let combined = %5
+// CHECK: %5 : %6 or c
+// CHECK: %6 : a and b
 // CHECK-NOT: ERROR
 // CHECK-NOT: WARNING

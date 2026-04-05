@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: MIT
+// RUN: %{compiler} parse %s 2>&1 | FileCheck %s
+
+let Point: struct { x: u32, y: u32 } = origin;
+let Color: variant { Red: u32, Blue: u32 } = primary;
+let Point.scale = fn(n: u32) -> u32 { return n; };
+
+// CHECK: %0 : let Point : %1 = origin
+// CHECK: %1 : struct { x u32, y u32 }
+// CHECK: %2 : let Color : %3 = primary
+// CHECK: %3 : variant { Red u32, Blue u32 }
+// CHECK: %4 : let %5 = %6
+// CHECK: %5 : Point.scale
+// CHECK: %6 : fn (n u32) u32 { return n; }
+// CHECK-NOT: ERROR
+// CHECK-NOT: WARNING

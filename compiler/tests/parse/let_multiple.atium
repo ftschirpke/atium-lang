@@ -8,5 +8,12 @@ let d = a + b;
 let flag = true;
 let msg = "done";
 
+// CHECK: %0 : let a = 1
+// CHECK: %1 : let mut b = 2
+// CHECK: %2 : let c : SomeType = a
+// CHECK: %3 : let d = %4
+// CHECK: %4 : a + b
+// CHECK: %5 : let flag = true
+// CHECK: %6 : let msg = "done"
 // CHECK-NOT: ERROR
 // CHECK-NOT: WARNING

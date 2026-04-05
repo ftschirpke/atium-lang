@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: MIT
+// RUN: %{compiler} parse %s 2>&1 | FileCheck %s
+
+let add = fn(x: u32, y: u32) -> u32 { return x + y; };
+
+let main = fn () -> void {
+    let result = add(1, 2);
+    let val = point.x;
+    let elem = arr[idx];
+};
+
+// CHECK: %0 : let add = %1
+// CHECK: %1 : fn (x u32, y u32) u32 { return %2; }
+// CHECK: %3 : let main = %4
+// CHECK: %4 : fn () bool { %5 }
+// CHECK: %5 : %6; %7; %8;
+// CHECK: %6 : let result = %9
+// CHECK: %9 : add ( 1, 2 )
+// CHECK: %7 : let val = %10
+// CHECK: %10 : point.x
+// CHECK: %8 : let elem = %11
+// CHECK: %11 : arr [ idx ]
+// CHECK-NOT: ERROR
+// CHECK-NOT: WARNING

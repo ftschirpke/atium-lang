@@ -4,5 +4,7 @@
 let flag = true;
 let other = false;
 
+// CHECK: %0 : let flag = true
+// CHECK: %1 : let other = false
 // CHECK-NOT: ERROR
 // CHECK-NOT: WARNING
