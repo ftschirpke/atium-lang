@@ -131,8 +131,10 @@ fn parse(allocator: std.mem.Allocator, writer: *std.Io.Writer, filepath: []const
         std.log.err("Error occured while parsing: {}", .{err});
     };
 
+    lib.parse.dump(&parser, writer);
+
     const footprint = parser.ast.item_list.memory_footprint();
-    writer.print("Finished parsing and got AST with size {} vs {} naive\n", .{
+    writer.print("\nFinished parsing and got AST with size {} vs {} naive\n", .{
         footprint.this,
         footprint.naive,
     }) catch |err| {
