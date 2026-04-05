@@ -154,7 +154,7 @@ pub const AstItem = union(enum) {
         else_body: ?AstIndex,
     },
     for_statement: struct {
-        loop_var: []const u8,
+        loop_var: AstIndex,
         iter_expr: AstIndex,
         body: AstIndex,
     },
@@ -544,7 +544,7 @@ pub const Parser = struct {
             );
             return Error.InvalidToken;
         }
-        const loop_var_token = try self.consume_token();
+        const loop_var_expr = try self.parse_nonoperator_expression();
         if (!self.check_next(lex.TokenKind.IN)) {
             print_token_error(
                 .Error,
@@ -561,7 +561,7 @@ pub const Parser = struct {
         const body = try self.parse_block();
         return self.ast.append(
             AstItem{ .for_statement = .{
-                .loop_var = loop_var_token.str.?,
+                .loop_var = loop_var_expr,
                 .iter_expr = iter_expr,
                 .body = body,
             } },
@@ -1310,11 +1310,7 @@ pub fn print_token_error(
 }
 
 pub fn dump(parser: *Parser, writer: *std.Io.Writer) void {
-    var dumper = Dumper{
-        .ast = &parser.ast,
-        .writer = writer,
-        .next_num = 0,
-    };
+    var dumper = Dumper.init(&parser.ast, writer);
     for (parser.ast.top_level.items) |item_index| {
         const num = dumper.get_num();
         dumper.dump_item(item_index, num);
@@ -1322,11 +1318,21 @@ pub fn dump(parser: *Parser, writer: *std.Io.Writer) void {
 }
 
 const Dumper = struct {
+    allocator: std.mem.Allocator,
     ast: *Ast,
     writer: *std.Io.Writer,
     next_num: usize,
 
     const Self = @This();
+
+    fn init(ast: *Ast, writer: *std.Io.Writer) Self {
+        return Self{
+            .allocator = ast.allocator,
+            .ast = ast,
+            .writer = writer,
+            .next_num = 0,
+        };
+    }
 
     fn get_num(self: *Self) usize {
         const num = self.next_num;
@@ -1349,7 +1355,7 @@ const Dumper = struct {
                 errmsg.error_writer(err);
                 return null;
             },
-            .identifier => |value| self.writer.print("{s}\n", .{value}) catch |err| {
+            .identifier => |value| self.writer.print("{s}", .{value}) catch |err| {
                 errmsg.error_writer(err);
                 return null;
             },
@@ -1400,9 +1406,14 @@ const Dumper = struct {
     fn dump_item(self: *Self, index: AstIndex, num: usize) void {
         const item = self.ast.item_list.get(index.item_index);
         switch (item) {
-            .type_func_def, .var_def => {},
+            .type_func_def, .var_def => {
+                self.writer.print("\n", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+            },
             else => {
-                self.writer.print("\n%{} = ", .{num}) catch |err| {
+                self.writer.print("\n    %{} = ", .{num}) catch |err| {
                     errmsg.error_writer(err);
                     return;
                 };
@@ -1559,12 +1570,13 @@ const Dumper = struct {
                     return;
                 };
                 var ref_list = std.ArrayList(?usize).initCapacity(
-                    self.ast.allocator,
+                    self.allocator,
                     value.args_expr.items.len,
                 ) catch |err| {
                     errmsg.error_oom(err);
                     return;
                 };
+                defer ref_list.deinit(self.allocator);
 
                 for (0..value.args_expr.items.len) |i| {
                     if (i > 0) self.writer.print(", ", .{}) catch |err| {
@@ -1572,7 +1584,7 @@ const Dumper = struct {
                         return;
                     };
                     const ref = self.quick_dump_item(value.args_expr.items[i]);
-                    ref_list.append(self.ast.allocator, ref) catch |err| {
+                    ref_list.append(self.allocator, ref) catch |err| {
                         errmsg.error_oom(err);
                         return;
                     };
@@ -1597,12 +1609,13 @@ const Dumper = struct {
                     return;
                 };
                 var ref_list = std.ArrayList(?usize).initCapacity(
-                    self.ast.allocator,
+                    self.allocator,
                     value.members.items.len,
                 ) catch |err| {
                     errmsg.error_oom(err);
                     return;
                 };
+                defer ref_list.deinit(self.allocator);
 
                 for (0..value.members.items.len) |i| {
                     if (i > 0) self.writer.print(", ", .{}) catch |err| {
@@ -1614,7 +1627,7 @@ const Dumper = struct {
                         return;
                     };
                     const ref = self.quick_dump_item(value.members.items[i].type_expr);
-                    ref_list.append(self.ast.allocator, ref) catch |err| {
+                    ref_list.append(self.allocator, ref) catch |err| {
                         errmsg.error_oom(err);
                         return;
                     };
@@ -1636,12 +1649,13 @@ const Dumper = struct {
                     return;
                 };
                 var ref_list = std.ArrayList(?usize).initCapacity(
-                    self.ast.allocator,
+                    self.allocator,
                     value.members.items.len,
                 ) catch |err| {
                     errmsg.error_oom(err);
                     return;
                 };
+                defer ref_list.deinit(self.allocator);
 
                 for (0..value.members.items.len) |i| {
                     if (i > 0) self.writer.print(", ", .{}) catch |err| {
@@ -1653,7 +1667,7 @@ const Dumper = struct {
                         return;
                     };
                     const ref = self.quick_dump_item(value.members.items[i].type_expr);
-                    ref_list.append(self.ast.allocator, ref) catch |err| {
+                    ref_list.append(self.allocator, ref) catch |err| {
                         errmsg.error_oom(err);
                         return;
                     };
@@ -1675,12 +1689,13 @@ const Dumper = struct {
                     return;
                 };
                 var ref_list = std.ArrayList(?usize).initCapacity(
-                    self.ast.allocator,
+                    self.allocator,
                     value.members.items.len,
                 ) catch |err| {
                     errmsg.error_oom(err);
                     return;
                 };
+                defer ref_list.deinit(self.allocator);
 
                 for (0..value.members.items.len) |i| {
                     if (i > 0) self.writer.print(", ", .{}) catch |err| {
@@ -1692,7 +1707,7 @@ const Dumper = struct {
                         return;
                     };
                     const ref = self.quick_dump_item(value.members.items[i].type_expr);
-                    ref_list.append(self.ast.allocator, ref) catch |err| {
+                    ref_list.append(self.allocator, ref) catch |err| {
                         errmsg.error_oom(err);
                         return;
                     };
@@ -1714,12 +1729,13 @@ const Dumper = struct {
                     return;
                 };
                 var ref_list = std.ArrayList(?usize).initCapacity(
-                    self.ast.allocator,
+                    self.allocator,
                     value.arguments.items.len,
                 ) catch |err| {
                     errmsg.error_oom(err);
                     return;
                 };
+                defer ref_list.deinit(self.allocator);
 
                 for (0..value.arguments.items.len) |i| {
                     if (i > 0) self.writer.print(", ", .{}) catch |err| {
@@ -1731,7 +1747,7 @@ const Dumper = struct {
                         return;
                     };
                     const ref = self.quick_dump_item(value.arguments.items[i].type_expr);
-                    ref_list.append(self.ast.allocator, ref) catch |err| {
+                    ref_list.append(self.allocator, ref) catch |err| {
                         errmsg.error_oom(err);
                         return;
                     };
@@ -1816,55 +1832,134 @@ const Dumper = struct {
                     self.dump_item(value.value, value_num);
                 }
             },
-            // TODO: continue from here
             .block => |value| {
-                const first_stmt_num = self.next_num;
-                for (value.stmts.items) |_| _ = self.get_num();
-                self.writer.print("{{", .{}) catch {};
+                var ref_list = std.ArrayList(?usize).initCapacity(
+                    self.allocator,
+                    value.stmts.items.len,
+                ) catch |err| {
+                    errmsg.error_oom(err);
+                    return;
+                };
+                defer ref_list.deinit(self.allocator);
+
                 for (0..value.stmts.items.len) |i| {
-                    self.writer.print(" %{};", .{first_stmt_num + i}) catch {};
+                    const ref = self.quick_dump_item(value.stmts.items[i]);
+                    ref_list.append(self.allocator, ref) catch |err| {
+                        errmsg.error_oom(err);
+                        return;
+                    };
+                    self.writer.print(" ; ", .{}) catch |err| {
+                        errmsg.error_writer(err);
+                        return;
+                    };
                 }
-                self.writer.print(" }}\n", .{}) catch {};
-                for (value.stmts.items, 0..) |stmt, i| {
-                    self.dump_item(stmt, first_stmt_num + i);
+                for (0..ref_list.items.len) |i| {
+                    const ref = ref_list.items[i];
+                    if (ref) |ref_num| {
+                        self.dump_item(value.stmts.items[i], ref_num);
+                    }
                 }
             },
             .if_statement => |value| {
-                const cond_num = self.get_num();
-                const then_num = self.get_num();
-                const else_num: ?usize = if (value.else_body != null) self.get_num() else null;
-                if (else_num) |en| {
-                    self.writer.print("if %{} %{} else %{}\n", .{ cond_num, then_num, en }) catch {};
-                } else {
-                    self.writer.print("if %{} %{}\n", .{ cond_num, then_num }) catch {};
+                self.writer.print("if ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const cond_ref = self.quick_dump_item(value.condition);
+                self.writer.print(" {{ ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const then_ref = self.quick_dump_item(value.then_body);
+                var else_ref: ?usize = null;
+                if (value.else_body) |else_body| {
+                    self.writer.print(" }} else {{ ", .{}) catch |err| {
+                        errmsg.error_writer(err);
+                        return;
+                    };
+                    else_ref = self.quick_dump_item(else_body);
                 }
-                self.dump_item(value.condition, cond_num);
-                self.dump_item(value.then_body, then_num);
-                if (else_num) |en| {
-                    self.dump_item(value.else_body.?, en);
+                self.writer.print(" }}", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                if (cond_ref) |condition_num| {
+                    self.dump_item(value.condition, condition_num);
+                }
+                if (then_ref) |then_num| {
+                    self.dump_item(value.then_body, then_num);
+                }
+                if (else_ref) |else_num| {
+                    self.dump_item(value.else_body.?, else_num);
                 }
             },
             .for_statement => |value| {
-                const iter_num = self.get_num();
-                const body_num = self.get_num();
-                self.writer.print("for {s} in %{} %{}\n", .{ value.loop_var, iter_num, body_num }) catch {};
-                self.dump_item(value.iter_expr, iter_num);
-                self.dump_item(value.body, body_num);
+                self.writer.print("for ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const loop_var_ref = self.quick_dump_item(value.loop_var);
+                self.writer.print(" in ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const iter_ref = self.quick_dump_item(value.iter_expr);
+                self.writer.print(" {{ ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const body_ref = self.quick_dump_item(value.body);
+                self.writer.print("}}", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                if (loop_var_ref) |loop_var_num| {
+                    self.dump_item(value.loop_var, loop_var_num);
+                }
+                if (iter_ref) |iter_num| {
+                    self.dump_item(value.iter_expr, iter_num);
+                }
+                if (body_ref) |body_num| {
+                    self.dump_item(value.body, body_num);
+                }
             },
             .while_statement => |value| {
-                const cond_num = self.get_num();
-                const body_num = self.get_num();
-                self.writer.print("while %{} %{}\n", .{ cond_num, body_num }) catch {};
-                self.dump_item(value.condition, cond_num);
-                self.dump_item(value.body, body_num);
+                self.writer.print("while ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const cond_ref = self.quick_dump_item(value.condition);
+                self.writer.print(" {{ ", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                const body_ref = self.quick_dump_item(value.body);
+                self.writer.print(" }}", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                if (cond_ref) |condition_num| {
+                    self.dump_item(value.condition, condition_num);
+                }
+                if (body_ref) |body_num| {
+                    self.dump_item(value.body, body_num);
+                }
             },
             .return_statement => |value| {
+                self.writer.print("return", .{}) catch |err| {
+                    errmsg.error_writer(err);
+                    return;
+                };
+                var value_ref: ?usize = null;
                 if (value.value) |ret_val| {
-                    const val_num = self.get_num();
-                    self.writer.print("return %{}\n", .{val_num}) catch {};
-                    self.dump_item(ret_val, val_num);
-                } else {
-                    self.writer.print("return\n", .{}) catch {};
+                    self.writer.print(" ", .{}) catch |err| {
+                        errmsg.error_writer(err);
+                        return;
+                    };
+                    value_ref = self.quick_dump_item(ret_val);
+                }
+                if (value_ref) |value_num| {
+                    self.dump_item(value.value.?, value_num);
                 }
             },
             else => return,
