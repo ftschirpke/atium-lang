@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: MIT
+name: Build and Test
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        optimize: [Debug, ReleaseFast]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Add LLVM 22 apt repository
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-22 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get update -qq
+
+      - name: Install LLVM 22
+        run: |
+          sudo apt-get install -y llvm-22 llvm-22-dev libmlir-22-dev llvm-22-tools
+          sudo ln -s /usr/bin/FileCheck-22 /usr/local/bin/FileCheck
+
+      - name: Setup venv
+        run: |
+          python3 -m venv venv
+          source venv/bin/activate
+
+      - name: Install lit
+        run: pip install lit
+
+      - name: Check Tool Versions
+        run: |
+          FileCheck --version
+          lit --version
+
+      - name: Check formatting
+        run: find . -maxdepth 2 -type d -name "src" | xargs zig fmt --check
+
+      - name: Build (${{ matrix.optimize }})
+        run: zig build -Dllvm-prefix=/usr/lib/llvm-22 -Doptimize=${{ matrix.optimize }}
+
+      - name: Run tests (${{ matrix.optimize }})
+        run: find . -maxdepth 2 -type d -name "tests" | xargs lit -v

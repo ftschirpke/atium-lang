@@ -4,8 +4,8 @@ let x = 42;
 // this entire line is a comment
 99
 
-// CHECK:    2 > LET IDENTIFIER("x") ASSIGN NUMBER("42") SEMICOLON
-// CHECK:    3 >
-// CHECK:    4 > NUMBER("99")
+// CHECK:    3 > LET IDENTIFIER("x") ASSIGN NUMBER("42") SEMICOLON
+// CHECK:    4 >
+// CHECK:    5 > NUMBER("99")
 // CHECK-NOT: ERROR
 // CHECK-NOT: WARNING

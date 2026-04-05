@@ -90,7 +90,7 @@ const NEWLINE = '\n';
 pub const SourceReader = struct {
     allocator: std.mem.Allocator,
     source: *SourceFile,
-    reader_buffer: [4096]u8,
+    reader_buffer: []u8,
     reader: std.fs.File.Reader,
     line: ?[]const u8,
     line_num: usize,
@@ -101,17 +101,18 @@ pub const SourceReader = struct {
     pub const Error = error{ EndOfFile, ReadError };
 
     fn init(allocator: std.mem.Allocator, source: *SourceFile, starting_line_idx: usize) !Self {
+        const reader_buffer = try allocator.alloc(u8, 4096);
         var new_self = Self{
             .source = source,
             .allocator = allocator,
-            .reader_buffer = undefined,
+            .reader_buffer = reader_buffer,
             .reader = undefined,
             .line = "",
             .line_num = 0,
             .char_idx = 0,
         };
         var file = try std.fs.openFileAbsolute(source.path.items, std.fs.File.OpenFlags{ .mode = .read_only });
-        new_self.reader = file.reader(&new_self.reader_buffer);
+        new_self.reader = file.reader(reader_buffer);
         source.size = try new_self.reader.getSize();
 
         if (starting_line_idx == 0) {
@@ -144,6 +145,7 @@ pub const SourceReader = struct {
     }
 
     fn deinit(self: Self) void {
+        self.allocator.free(self.reader_buffer);
         self.reader.file.close();
     }
 
